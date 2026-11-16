@@ -79,10 +79,14 @@ object Scheduler {
         val prefs = Prefs(ctx)
         prefs.scheduledPurchaseIds.forEach { am(ctx).cancel(firePi(ctx, KIND_PURCHASE, it)) }
         val now = LocalDateTime.now()
-        val time = Logic.parseTime(prefs.purchaseTime)
+        val dayTime = Logic.parseTime(prefs.purchaseTime)
+        val nightTime = Logic.parseTime(prefs.nightTime)
+        val nightDays = prefs.nightDays
         val ids = mutableSetOf<Long>()
         AppDb.get(ctx).dao().purchases().forEach { p ->
-            val t = Logic.purchaseTrigger(p, now, time) ?: return@forEach
+            val t = Logic.purchaseTrigger(p, now, dayTime, nightTime) ?: return@forEach
+            // 前一天晚上的提醒已合併在晚上確認裡（明天打折要買），不重複跳。
+            if (p.date == t.toLocalDate().plusDays(1).toString() && Logic.coveredByNight(t, nightTime, nightDays)) return@forEach
             setAt(ctx, toMillis(t), firePi(ctx, KIND_PURCHASE, p.id), p.mode == Mode.ALARM)
             ids += p.id
         }

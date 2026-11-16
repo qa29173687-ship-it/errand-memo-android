@@ -41,14 +41,15 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
             SlotCard("🏃 下班提醒", "到點列出今天要拿、要買的東西（沒有項目就不提醒）",
                 prefs.eveningTime, prefs.eveningDays, prefs.eveningMode,
                 onTime = { pickTime = "evening" }, onDays = { prefs.eveningDays = it; changed() }, onMode = { prefs.eveningMode = it; changed() })
-            SlotCard("🌙 晚上確認", "還沒做完的問你要不要延到明天，並提醒明天下班要做什麼（兩邊都空就不提醒）",
+            SlotCard("🌙 晚上確認", "還沒做完的問你要不要延到明天，並列出「明天下班要做」和「明天打折要買」，可以前一晚先確認（全部都空就不提醒）",
                 prefs.nightTime, prefs.nightDays, prefs.nightMode,
                 onTime = { pickTime = "night" }, onDays = { prefs.nightDays = it; changed() }, onMode = { prefs.nightMode = it; changed() })
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("📦 採購提醒時間", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                    Text("提醒日當天這個時間提醒（通知或鬧鐘在每個採購項目裡選）", fontSize = 13.sp, color = Muted)
-                    OutlinedButton(onClick = { pickTime = "purchase" }) { Text("⏰ " + prefs.purchaseTime) }
+                    Text("📦 採購提醒", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text("預設「前一天晚上」：在晚上確認時間（${prefs.nightTime}）提醒，並合併在晚上確認的「明天打折要買」。「前3天／前7天」也在晚上確認時間提醒。", fontSize = 13.sp, color = Muted)
+                    Text("選「當天」的項目，在下面這個時間提醒：", fontSize = 13.sp, color = Muted)
+                    OutlinedButton(onClick = { pickTime = "purchase" }) { Text("⏰ 當天 " + prefs.purchaseTime) }
                 }
             }
         }
@@ -63,7 +64,7 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
                 }
             }
         }
-        Text("順便備忘 v1.0.0 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
+        Text("順便備忘 v1.0.1 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
     }
 
     pickTime?.let { which ->

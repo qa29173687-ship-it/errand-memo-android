@@ -80,15 +80,43 @@ object Logic {
 
     fun purchaseRemindDate(p: Purchase): LocalDate = LocalDate.parse(p.date).minusDays(p.remindDays.toLong())
 
-    /** 採購提醒時間：提醒日的 time；若已過但採購日還沒過，改為下一個 time（不晚於採購日）。已買或過期 → null。 */
-    fun purchaseTrigger(p: Purchase, now: LocalDateTime, time: LocalTime): LocalDateTime? {
+    /** 採購提醒時間。remindDays=0 → 當天 dayTime；≥1 → (日期-N天) 的 nightTime。
+     *  若已錯過（例如太晚才新增），改成下一個「到日期前一晚為止的 nightTime」或「當天 dayTime」中最早的。已買/過期 → null。 */
+    fun purchaseTrigger(p: Purchase, now: LocalDateTime, dayTime: LocalTime, nightTime: LocalTime): LocalDateTime? {
         if (p.boughtOn != null) return null
         val date = runCatching { LocalDate.parse(p.date) }.getOrNull() ?: return null
-        val first = purchaseRemindDate(p).atTime(time)
+        val first = if (p.remindDays <= 0) date.atTime(dayTime) else purchaseRemindDate(p).atTime(nightTime)
         if (first.isAfter(now)) return first
-        var c = now.toLocalDate().atTime(time)
-        if (!c.isAfter(now)) c = c.plusDays(1)
-        return if (!c.toLocalDate().isAfter(date)) c else null
+        val candidates = mutableListOf(date.atTime(dayTime))
+        if (p.remindDays > 0) {
+            var d = now.toLocalDate()
+            while (d.isBefore(date)) { candidates += d.atTime(nightTime); d = d.plusDays(1) }
+        }
+        return candidates.filter { it.isAfter(now) }.minOrNull()
+    }
+
+    /** 這個採購提醒時間剛好是晚上確認會響的時候 → 合併到晚上確認，不另外跳。 */
+    fun coveredByNight(trigger: LocalDateTime, nightTime: LocalTime, nightDays: Set<Int>): Boolean =
+        trigger.toLocalTime() == nightTime && dow(trigger.toLocalDate()) in nightDays
+
+    /** 明天打折要買（未買、日期 = 明天）。 */
+    fun purchasesTomorrow(list: List<Purchase>, today: LocalDate): List<Purchase> =
+        list.filter { it.boughtOn == null && it.date == today.plusDays(1).toString() }
+
+    /** 晚上確認的標題與內容；三邊都空回傳 null（不提醒）。 */
+    fun nightMessage(pending: List<Errand>, tomorrow: List<Errand>, buys: List<Purchase>): Pair<String, String>? {
+        if (pending.isEmpty() && tomorrow.isEmpty() && buys.isEmpty()) return null
+        fun el(l: List<Errand>) = l.joinToString("\n") { "【${typeLabel(it.type)}】${it.title}" }
+        val parts = mutableListOf<String>()
+        if (pending.isNotEmpty()) parts += "還沒做完（${pending.size}）：\n" + el(pending)
+        if (tomorrow.isNotEmpty()) parts += "明天下班要做（${tomorrow.size}）：\n" + el(tomorrow)
+        if (buys.isNotEmpty()) parts += "明天打折要買（${buys.size}）：\n" + buys.joinToString("\n") { "🛒 ${it.title}" }
+        val title = if (pending.isNotEmpty()) "這些還沒做完，要延到明天嗎？"
+        else listOfNotNull(
+            if (tomorrow.isNotEmpty()) "下班要做 ${tomorrow.size} 項" else null,
+            if (buys.isNotEmpty()) "打折要買 ${buys.size} 項" else null,
+        ).joinToString("・", prefix = "明天：")
+        return title to parts.joinToString("\n\n")
     }
 
     enum class PStatus { UPCOMING, TODAY, OVERDUE, BOUGHT }
@@ -148,7 +176,7 @@ object Logic {
         return "${shortDate(d)}（$rel）"
     }
 
-    fun remindLabel(days: Int): String = if (days == 0) "當天" else "提前 $days 天"
+    fun remindLabel(days: Int): String = when { days <= 0 -> "當天早上"; days == 1 -> "前一天晚上"; else -> "前 $days 天晚上" }
 
     fun typeLabel(type: String): String = if (type == "buy") "買" else "拿"
 
@@ -158,11 +186,11 @@ object Logic {
     // ---- 採購清單 ↔ 下班順便做 連結 ----
 
     /** 從採購項目建立今天的「買」項目（連結 purchaseId）。 */
-    fun errandFromPurchase(p: Purchase, today: LocalDate, nowMillis: Long = 0): Errand =
+    fun errandFromPurchase(p: Purchase, day: LocalDate, nowMillis: Long = 0): Errand =
         Errand(title = p.title, type = ItemType.BUY, note = p.note, repeat = Repeat.ONCE,
-            dueDate = today.toString(), createdAt = nowMillis, purchaseId = p.id)
+            dueDate = day.toString(), createdAt = nowMillis, purchaseId = p.id)
 
-    /** 已經有一筆連結且未完成的項目就不重複加入。 */
+    /** 已經有一筆連結且未完成的項目就不重複加入（不論是今天或明天）。 */
     fun shouldAddLinked(existing: List<Errand>, purchaseId: Long): Boolean =
         existing.none { it.purchaseId == purchaseId && it.doneOn == null }
 

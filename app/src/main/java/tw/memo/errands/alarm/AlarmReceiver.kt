@@ -68,15 +68,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 Scheduler.KIND_NIGHT -> {
                     if (!forceAlarm) Scheduler.scheduleSlot(ctx, kind)
                     val all = dao.errands()
-                    val pending = Logic.pendingToday(all, today)
-                    val tomorrow = Logic.dueTomorrow(all, today)
-                    if (pending.isEmpty() && tomorrow.isEmpty()) return
-                    val (title, text) = if (pending.isNotEmpty()) {
-                        "這些還沒做完，要延到明天嗎？" to (lines(pending) +
-                            if (tomorrow.isNotEmpty()) "\n\n明天下班要做：\n" + lines(tomorrow) else "")
-                    } else "明天下班要做（${tomorrow.size} 項）" to lines(tomorrow)
+                    val buys = Logic.purchasesTomorrow(dao.purchases(), today)
+                    val (title, text) = Logic.nightMessage(Logic.pendingToday(all, today), Logic.dueTomorrow(all, today), buys) ?: return
+                    // 明天要買的項目若設成鬧鐘，晚上確認也用鬧鐘響。
                     Notifier.show(ctx, kind, 0, title, text, Notifier.TARGET_NIGHT,
-                        forceAlarm || prefs.nightMode == Mode.ALARM)
+                        forceAlarm || prefs.nightMode == Mode.ALARM || buys.any { it.mode == Mode.ALARM })
                 }
                 Scheduler.KIND_PURCHASE -> {
                     val p = dao.purchase(pid) ?: return

@@ -28,6 +28,8 @@ fun NightScreen(today: LocalDate, onClose: () -> Unit) {
     val all by remember { dao.errandsFlow() }.collectAsState(initial = emptyList())
     val pending = Logic.pendingToday(all, today)
     val tomorrow = Logic.dueTomorrow(all, today)
+    val purchases by remember { dao.purchasesFlow() }.collectAsState(initial = emptyList())
+    val buys = Logic.purchasesTomorrow(purchases, today)
     fun io(block: suspend () -> Unit) = scope.launch(Dispatchers.IO) { block() }
     suspend fun deferOne(e: Errand) {
         Logic.defer(e, today, System.currentTimeMillis()).forEach { if (it.id == 0L) dao.insert(it) else dao.update(it) }
@@ -81,6 +83,25 @@ fun NightScreen(today: LocalDate, onClose: () -> Unit) {
                     TypeTag(e.type); Spacer(Modifier.width(8.dp))
                     Text(e.title, fontSize = 16.sp)
                     if (e.note.isNotBlank()) Text("  ${e.note}", fontSize = 13.sp, color = Muted)
+                }
+            }
+            item {
+                Spacer(Modifier.height(8.dp))
+                Text("明天打折要買", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            }
+            if (buys.isEmpty()) item { Text("採購清單裡沒有明天的項目。", color = Muted) }
+            items(buys, key = { "b" + it.id }) { p ->
+                val linked = all.any { it.purchaseId == p.id && it.doneOn == null }
+                Card(Modifier.fillMaxWidth()) {
+                    Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("🛒 " + p.title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            if (p.note.isNotBlank()) Text(p.note, fontSize = 13.sp, color = Muted)
+                        }
+                        TextButton(enabled = !linked, onClick = { io { Repo.addPurchaseToDay(ctx, p.id, today.plusDays(1)) } }) {
+                            Text(if (linked) "已在下班要做" else "加入明天下班要做")
+                        }
+                    }
                 }
             }
             item {

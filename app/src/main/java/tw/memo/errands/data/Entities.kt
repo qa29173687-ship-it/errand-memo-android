@@ -24,14 +24,15 @@ data class Errand(
     val purchaseId: Long? = null,
 )
 
-/** 採購清單。date = 使用者選的日期（打折日），remindDays = 提前幾天提醒。 */
+/** 採購清單。date = 使用者選的日期（打折日）。
+ *  remindDays：0 = 當天早上（採購提醒時間）；1 = 前一天晚上；3/7 = 前 N 天晚上（晚上確認時間）。 */
 @Entity(tableName = "purchases")
 data class Purchase(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val title: String,
     val note: String = "",
     val date: String,
-    val remindDays: Int = 0,
+    val remindDays: Int = 1,
     val mode: String = Mode.NOTIFY,
     val boughtOn: String? = null,
     val createdAt: Long = 0,

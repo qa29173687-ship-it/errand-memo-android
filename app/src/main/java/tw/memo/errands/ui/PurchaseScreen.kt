@@ -125,10 +125,10 @@ fun PurchaseDialog(initial: Purchase?, today: LocalDate, onDismiss: () -> Unit, 
     var title by remember { mutableStateOf(initial?.title ?: "") }
     var note by remember { mutableStateOf(initial?.note ?: "") }
     var date by remember { mutableStateOf(initial?.date?.let { LocalDate.parse(it) } ?: today.plusDays(7)) }
-    var remind by remember { mutableIntStateOf(initial?.remindDays ?: 0) }
+    var remind by remember { mutableIntStateOf(initial?.remindDays ?: 1) }
     var mode by remember { mutableStateOf(initial?.mode ?: Mode.NOTIFY) }
     var pick by remember { mutableStateOf(false) }
-    val opts = listOf(0, 1, 3, 7)
+    val opts = listOf(1, 0, 3, 7)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (initial == null) "新增採購" else "編輯採購") },
@@ -139,7 +139,9 @@ fun PurchaseDialog(initial: Purchase?, today: LocalDate, onDismiss: () -> Unit, 
                 Text("日期（打折日）", color = Muted, fontSize = 14.sp)
                 OutlinedButton(onClick = { pick = true }) { Text("📅 " + Logic.dateLabel(date)) }
                 Text("提醒", color = Muted, fontSize = 14.sp)
-                Segmented(listOf("當天", "前1天", "前3天", "前7天"), opts.indexOf(remind).coerceAtLeast(0), { remind = opts[it] }, Modifier.fillMaxWidth())
+                Segmented(listOf("前一晚", "當天", "前3天", "前7天"), opts.indexOf(remind).coerceAtLeast(0), { remind = opts[it] }, Modifier.fillMaxWidth())
+                Text(if (remind == 0) "當天早上（設定裡的採購提醒時間）提醒" else "在晚上確認時間提醒" + if (remind == 1) "，會一起列在晚上確認的「明天打折要買」" else "",
+                    fontSize = 13.sp, color = Muted)
                 Segmented(listOf("通知", "鬧鐘"), if (mode == Mode.ALARM) 1 else 0, { mode = if (it == 1) Mode.ALARM else Mode.NOTIFY }, Modifier.fillMaxWidth())
             }
         },

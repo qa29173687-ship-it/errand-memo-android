@@ -2,6 +2,7 @@ package tw.memo.errands.data
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 
@@ -29,11 +30,17 @@ interface MemoDao {
     @Delete suspend fun delete(f: Frequent)
 }
 
-@Database(entities = [Errand::class, Purchase::class, Frequent::class], version = 1, exportSchema = false)
+@Database(entities = [Errand::class, Purchase::class, Frequent::class], version = 2, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun dao(): MemoDao
 
     companion object {
+        /** v1.0.1：採購提醒預設改成「前一天晚上」。v1.0.0 的「當天」(0，當時的預設) 改成 1；3/7 天保留（改在晚上提醒）。資料全部保留。 */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("UPDATE purchases SET remindDays = 1 WHERE remindDays = 0")
+            }
+        }
         @Volatile private var inst: AppDb? = null
         fun get(ctx: Context): AppDb = inst ?: synchronized(this) {
             inst ?: Room.databaseBuilder(ctx.applicationContext, AppDb::class.java, "memo.db")
@@ -45,6 +52,7 @@ abstract class AppDb : RoomDatabase() {
                             }
                     }
                 })
+                .addMigrations(MIGRATION_1_2)
                 .build().also { inst = it }
         }
     }

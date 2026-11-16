@@ -24,7 +24,11 @@ object Repo {
     }
 
     /** 加入今天下班要做。回傳 false 代表已經加過了。 */
-    suspend fun addPurchaseToToday(ctx: Context, pid: Long, today: LocalDate = LocalDate.now()): Boolean {
+    suspend fun addPurchaseToToday(ctx: Context, pid: Long, today: LocalDate = LocalDate.now()): Boolean =
+        addPurchaseToDay(ctx, pid, today)
+
+    /** 加入某天下班要做（連結的「買」項目）。 */
+    suspend fun addPurchaseToDay(ctx: Context, pid: Long, today: LocalDate): Boolean {
         val dao = AppDb.get(ctx).dao()
         val p = dao.purchase(pid) ?: return false
         if (!Logic.shouldAddLinked(dao.errandsForPurchase(pid), pid)) return false
