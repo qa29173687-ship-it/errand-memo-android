@@ -1,0 +1,139 @@
+package tw.memo.errands.ui
+
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
+import android.widget.Toast
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import tw.memo.errands.alarm.Notifier
+import tw.memo.errands.alarm.Scheduler
+import tw.memo.errands.data.Mode
+import tw.memo.errands.data.Prefs
+import tw.memo.errands.logic.Logic
+import java.time.LocalTime
+
+@Composable
+fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
+    val ctx = LocalContext.current
+    val prefs = remember { Prefs(ctx) }
+    val scope = rememberCoroutineScope()
+    var tick by remember { mutableIntStateOf(0) }
+    fun changed() { tick++; scope.launch(Dispatchers.IO) { Scheduler.rescheduleAll(ctx) } }
+    var pickTime by remember { mutableStateOf<String?>(null) }
+
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text("設定", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        key(tick) {
+            SlotCard("🏃 下班提醒", "到點列出今天要拿、要買的東西（沒有項目就不提醒）",
+                prefs.eveningTime, prefs.eveningDays, prefs.eveningMode,
+                onTime = { pickTime = "evening" }, onDays = { prefs.eveningDays = it; changed() }, onMode = { prefs.eveningMode = it; changed() })
+            SlotCard("🌙 晚上確認", "還沒做完的問你要不要延到明天，並提醒明天下班要做什麼（兩邊都空就不提醒）",
+                prefs.nightTime, prefs.nightDays, prefs.nightMode,
+                onTime = { pickTime = "night" }, onDays = { prefs.nightDays = it; changed() }, onMode = { prefs.nightMode = it; changed() })
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("📦 採購提醒時間", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                    Text("提醒日當天這個時間提醒（通知或鬧鐘在每個採購項目裡選）", fontSize = 13.sp, color = Muted)
+                    OutlinedButton(onClick = { pickTime = "purchase" }) { Text("⏰ " + prefs.purchaseTime) }
+                }
+            }
+        }
+        PermissionCard(resumeTick, requestNotif)
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text("🔔 測試", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                Text("按下後 10 秒會跳出，可以先鎖螢幕試試看。", fontSize = 13.sp, color = Muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { Scheduler.test(ctx, false); Toast.makeText(ctx, "10 秒後跳出測試通知", Toast.LENGTH_SHORT).show() }) { Text("測試通知") }
+                    OutlinedButton(onClick = { Scheduler.test(ctx, true); Toast.makeText(ctx, "10 秒後響測試鬧鐘", Toast.LENGTH_SHORT).show() }) { Text("測試鬧鐘") }
+                }
+            }
+        }
+        Text("順便備忘 v1.0.0 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
+    }
+
+    pickTime?.let { which ->
+        val cur = when (which) { "evening" -> prefs.eveningTime; "night" -> prefs.nightTime; else -> prefs.purchaseTime }
+        TimeDialog(Logic.parseTime(cur), { pickTime = null }) { t ->
+            val s = Logic.timeStr(t)
+            when (which) { "evening" -> prefs.eveningTime = s; "night" -> prefs.nightTime = s; else -> prefs.purchaseTime = s }
+            changed()
+        }
+    }
+}
+
+@Composable
+private fun SlotCard(title: String, desc: String, time: String, days: Set<Int>, mode: String,
+                     onTime: () -> Unit, onDays: (Set<Int>) -> Unit, onMode: (String) -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text(desc, fontSize = 13.sp, color = Muted)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                OutlinedButton(onClick = onTime) { Text("⏰ $time") }
+                Text(Logic.daysLabel(days), color = Muted, fontSize = 14.sp)
+            }
+            WeekdayPicker(days, onDays)
+            Segmented(listOf("通知", "鬧鐘（響到按掉）"), if (mode == Mode.ALARM) 1 else 0,
+                { onMode(if (it == 1) Mode.ALARM else Mode.NOTIFY) }, Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun PermissionCard(resumeTick: Int, requestNotif: () -> Unit) {
+    val ctx = LocalContext.current
+    val notifOk = remember(resumeTick) { Notifier.canPost(ctx) }
+    val exactOk = remember(resumeTick) { Scheduler.canExact(ctx) }
+    val fullOk = remember(resumeTick) { Notifier.canFullScreen(ctx) }
+    val batteryOk = remember(resumeTick) { ctx.getSystemService(PowerManager::class.java).isIgnoringBatteryOptimizations(ctx.packageName) }
+    fun open(i: Intent) = try { ctx.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } catch (_: Exception) {
+        ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + ctx.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("🔐 讓提醒準時跳出", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            PermRow("通知", notifOk) {
+                if (Build.VERSION.SDK_INT >= 33 && !notifOk) {
+                    val act = ctx as? android.app.Activity
+                    if (act != null && !act.shouldShowRequestPermissionRationale(android.Manifest.permission.POST_NOTIFICATIONS) && Prefs(ctx).askedNotifPermission)
+                        open(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+                    else requestNotif()
+                } else open(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+            }
+            if (Build.VERSION.SDK_INT >= 31) PermRow("精確鬧鐘（準時響）", exactOk) {
+                open(Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:" + ctx.packageName)))
+            }
+            if (Build.VERSION.SDK_INT >= 34) PermRow("鎖定畫面顯示鬧鐘（全螢幕）", fullOk) {
+                open(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:" + ctx.packageName)))
+            }
+            PermRow("不限制電池用量（建議）", batteryOk) {
+                open(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            }
+            Text("小米、OPPO、vivo、華碩等手機另外有「自啟動／背景執行」設定，請在系統設定把「順便備忘」設成允許，重開機後提醒才不會消失。",
+                fontSize = 13.sp, color = Muted)
+        }
+    }
+}
+
+@Composable
+private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text((if (ok) "✅ " else "⚠️ ") + label, Modifier.weight(1f), fontSize = 15.sp)
+        if (ok) Text("已允許", color = Muted, fontSize = 13.sp) else TextButton(onClick = onFix) { Text("去開啟") }
+    }
+}
