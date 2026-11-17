@@ -4,6 +4,7 @@ import org.junit.Assert.*
 import org.junit.Test
 import tw.memo.errands.data.*
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.logic.Sale
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -78,68 +79,18 @@ class LogicTest {
     private val nine = LocalTime.of(9, 0)
     private val ten = LocalTime.of(22, 0)
 
-    @Test fun purchaseTriggerNightBeforeIsDefault() {
-        val p = Purchase(id = 1, title = "耳機", date = "2026-11-20")
-        assertEquals(1, p.remindDays)
-        assertEquals(LocalDateTime.of(2026, 11, 19, 22, 0), Logic.purchaseTrigger(p, mon.atTime(8, 0), nine, ten))
-        // 前一晚錯過 → 當天 09:00
-        assertEquals(LocalDateTime.of(2026, 11, 20, 9, 0), Logic.purchaseTrigger(p, LocalDateTime.of(2026, 11, 19, 23, 0), nine, ten))
-        assertNull(Logic.purchaseTrigger(p, LocalDateTime.of(2026, 11, 20, 10, 0), nine, ten))
-        assertNull(Logic.purchaseTrigger(p.copy(boughtOn = "2026-11-16"), mon.atTime(8, 0), nine, ten))
-    }
-    @Test fun purchaseTriggerAdvanceDaysAtNight() {
-        val p = Purchase(id = 1, title = "耳機", date = "2026-11-20", remindDays = 3)
-        assertEquals(LocalDateTime.of(2026, 11, 17, 22, 0), Logic.purchaseTrigger(p, mon.atTime(8, 0), nine, ten))
-        // 晚加入：當晚 22:00
-        assertEquals(LocalDateTime.of(2026, 11, 18, 22, 0), Logic.purchaseTrigger(p, LocalDateTime.of(2026, 11, 18, 10, 0), nine, ten))
-        assertEquals(LocalDateTime.of(2026, 11, 20, 9, 0), Logic.purchaseTrigger(p, LocalDateTime.of(2026, 11, 19, 22, 30), nine, ten))
-        val p7 = p.copy(remindDays = 7, date = "2026-11-30")
-        assertEquals(LocalDateTime.of(2026, 11, 23, 22, 0), Logic.purchaseTrigger(p7, mon.atTime(8, 0), nine, ten))
-    }
-    @Test fun purchaseTriggerSameDayMorning() {
-        val p = Purchase(id = 1, title = "耳機", date = "2026-11-20", remindDays = 0)
-        assertEquals(LocalDateTime.of(2026, 11, 20, 9, 0), Logic.purchaseTrigger(p, mon.atTime(8, 0), nine, ten))
-        assertNull(Logic.purchaseTrigger(p, LocalDateTime.of(2026, 11, 20, 9, 30), nine, ten))
-    }
     @Test fun coveredByNight() {
         val t = LocalDateTime.of(2026, 11, 19, 22, 0) // 週四
         assertTrue(Logic.coveredByNight(t, ten, setOf(0, 1, 2, 3, 4, 5, 6)))
         assertFalse(Logic.coveredByNight(t, ten, setOf(1)))
         assertFalse(Logic.coveredByNight(t, LocalTime.of(21, 30), setOf(4)))
     }
-    @Test fun remindLabels() {
-        assertEquals("前一天晚上", Logic.remindLabel(1)); assertEquals("當天早上", Logic.remindLabel(0))
-        assertEquals("前 3 天晚上", Logic.remindLabel(3))
-    }
-    @Test fun purchasesTomorrowUnboughtOnly() {
-        val list = listOf(Purchase(id = 1, title = "a", date = "2026-11-17"), Purchase(id = 2, title = "b", date = "2026-11-17", boughtOn = "x"),
-            Purchase(id = 3, title = "c", date = "2026-11-16"), Purchase(id = 4, title = "d", date = "2026-11-18"))
-        assertEquals(listOf(1L), Logic.purchasesTomorrow(list, mon).map { it.id })
-    }
-    @Test fun nightMessageIncludesBuysAndNotSkippedForBuysOnly() {
-        val buy = Purchase(id = 9, title = "藍牙耳機", date = "2026-11-17")
-        assertNull(Logic.nightMessage(emptyList(), emptyList(), emptyList()))
-        val (t1, x1) = Logic.nightMessage(emptyList(), emptyList(), listOf(buy))!!
-        assertEquals("明天：打折要買 1 項", t1); assertTrue(x1.contains("明天打折要買（1）") && x1.contains("藍牙耳機"))
-        val (t2, x2) = Logic.nightMessage(emptyList(), listOf(once(3, mon.plusDays(1))), listOf(buy))!!
-        assertEquals("明天：下班要做 1 項・打折要買 1 項", t2)
-        assertTrue(x2.contains("明天下班要做（1）") && x2.contains("買牛奶3"))
-        val (t3, x3) = Logic.nightMessage(listOf(once(1, mon)), emptyList(), listOf(buy))!!
-        assertEquals("這些還沒做完，要延到明天嗎？", t3); assertTrue(x3.contains("還沒做完（1）") && x3.contains("藍牙耳機"))
-    }
     @Test fun addPurchaseToTomorrowLinkedNoDup() {
-        val buy = Purchase(id = 9, title = "藍牙耳機", date = "2026-11-17")
+        val buy = Purchase(id = 9, title = "藍牙耳機", startDate = "2026-11-17", endDate = "2026-11-17")
         val e = Logic.errandFromPurchase(buy, mon.plusDays(1))
         assertEquals(mon.plusDays(1).toString(), e.dueDate); assertEquals(ItemType.BUY, e.type); assertEquals(9L, e.purchaseId)
         assertEquals(listOf(e), Logic.dueTomorrow(listOf(e), mon))
         assertFalse(Logic.shouldAddLinked(listOf(e.copy(id = 1)), 9))
-    }
-    @Test fun purchaseStatus() {
-        val p = Purchase(title = "a", date = "2026-11-16")
-        assertEquals(Logic.PStatus.TODAY, Logic.purchaseStatus(p, mon))
-        assertEquals(Logic.PStatus.OVERDUE, Logic.purchaseStatus(p, mon.plusDays(1)))
-        assertEquals(Logic.PStatus.UPCOMING, Logic.purchaseStatus(p, mon.minusDays(1)))
-        assertEquals(Logic.PStatus.BOUGHT, Logic.purchaseStatus(p.copy(boughtOn = "x"), mon.plusDays(1)))
     }
     @Test fun labels() {
         assertEquals("週一至週五", Logic.daysLabel(setOf(1, 2, 3, 4, 5)))
@@ -149,7 +100,7 @@ class LogicTest {
     }
 
     // ---- 採購 ↔ 下班順便做 連結 ----
-    private val sale = Purchase(id = 5, title = "藍牙耳機", note = "雙11", date = "2026-11-16", remindDays = 1)
+    private val sale = Purchase(id = 5, title = "藍牙耳機", note = "雙11", startDate = "2026-11-16", endDate = "2026-11-20")
 
     @Test fun errandFromPurchaseIsTodayBuyLinked() {
         val e = Logic.errandFromPurchase(sale, mon, 1)
@@ -166,7 +117,7 @@ class LogicTest {
     @Test fun checkingErrandMarksPurchaseBought() {
         val b = Logic.purchaseAfterErrandToggle(sale, true, mon)
         assertEquals(mon.toString(), b.boughtOn)
-        assertEquals(Logic.PStatus.BOUGHT, Logic.purchaseStatus(b, mon))
+        assertEquals(Sale.Status.BOUGHT, Sale.status(b, mon))
         assertNull(Logic.purchaseAfterErrandToggle(b, false, mon).boughtOn)
         // 已買的不改日期
         assertEquals("2026-11-10", Logic.purchaseAfterErrandToggle(sale.copy(boughtOn = "2026-11-10"), true, mon).boughtOn)
@@ -183,9 +134,5 @@ class LogicTest {
     }
     @Test fun deferKeepsLink() {
         assertEquals(5L, Logic.defer(once(1, mon, pid = 5), mon)[0].purchaseId)
-    }
-    @Test fun alertTitle() {
-        assertEquals("打折了：藍牙耳機", Logic.purchaseAlertTitle(sale, mon))
-        assertEquals("快打折了：藍牙耳機", Logic.purchaseAlertTitle(sale, mon.minusDays(1)))
     }
 }

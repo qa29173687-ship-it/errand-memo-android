@@ -15,6 +15,9 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import tw.memo.errands.R
+import tw.memo.errands.logic.Sale
+import android.os.Bundle
+import java.time.LocalDate
 import tw.memo.errands.ui.MainActivity
 
 object Notifier {
@@ -68,14 +71,15 @@ object Notifier {
         return PendingIntent.getActivity(ctx, nid, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    private fun action(ctx: Context, act: String, kind: String, pid: Long, nid: Int): PendingIntent {
+    private fun action(ctx: Context, act: String, kind: String, pid: Long, nid: Int, ev: Bundle?): PendingIntent {
         val i = Intent(ctx, AlarmReceiver::class.java).setAction(act)
             .putExtra(Scheduler.EXTRA_KIND, kind).putExtra(Scheduler.EXTRA_PID, pid).putExtra(EXTRA_NID, nid)
+        if (ev != null) i.putExtras(ev)
         val rc = nid * 10 + when (act) { Scheduler.ACTION_DISMISS -> 1; Scheduler.ACTION_SNOOZE -> 2; else -> 3 }
         return PendingIntent.getBroadcast(ctx, rc, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
 
-    fun show(ctx: Context, kind: String, pid: Long, title: String, text: String, target: String, alarm: Boolean) {
+    fun show(ctx: Context, kind: String, pid: Long, title: String, text: String, target: String, alarm: Boolean, ev: Bundle? = null) {
         if (!canPost(ctx)) return
         ensureChannels(ctx)
         val nid = notificationId(kind, pid)
@@ -90,6 +94,7 @@ object Notifier {
             val full = Intent(ctx, AlarmActivity::class.java)
                 .putExtra(EXTRA_TITLE, title).putExtra(EXTRA_TEXT, text).putExtra(EXTRA_NID, nid)
                 .putExtra(EXTRA_TARGET, target).putExtra(Scheduler.EXTRA_KIND, kind).putExtra(Scheduler.EXTRA_PID, pid)
+                .apply { if (ev != null) putExtras(ev) }
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION)
             val fullPi = PendingIntent.getActivity(ctx, nid + 500, full, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             b.setCategory(NotificationCompat.CATEGORY_ALARM)
@@ -97,12 +102,15 @@ object Notifier {
                 .setOngoing(true)
                 .setAutoCancel(false)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .addAction(0, "關閉", action(ctx, Scheduler.ACTION_DISMISS, kind, pid, nid))
-                .addAction(0, "稍後 ${Scheduler.SNOOZE_MINUTES} 分鐘", action(ctx, Scheduler.ACTION_SNOOZE, kind, pid, nid))
+                .addAction(0, "關閉", action(ctx, Scheduler.ACTION_DISMISS, kind, pid, nid, ev))
+                .addAction(0, "稍後 ${Scheduler.SNOOZE_MINUTES} 分鐘", action(ctx, Scheduler.ACTION_SNOOZE, kind, pid, nid, ev))
         } else {
             b.setCategory(NotificationCompat.CATEGORY_REMINDER).setAutoCancel(true)
         }
-        if (kind == Scheduler.KIND_PURCHASE) b.addAction(0, "加入今天下班要做", action(ctx, Scheduler.ACTION_ADD_TODAY, kind, pid, nid))
+        if (kind == Scheduler.KIND_PURCHASE) {
+            val day = Scheduler.evDay(ev) ?: LocalDate.now()
+            b.addAction(0, Sale.addLabel(day, LocalDate.now()), action(ctx, Scheduler.ACTION_ADD_TODAY, kind, pid, nid, ev))
+        }
         val n = b.build()
         if (alarm) n.flags = n.flags or Notification.FLAG_INSISTENT
         try { NotificationManagerCompat.from(ctx).notify(nid, n) } catch (_: SecurityException) {}

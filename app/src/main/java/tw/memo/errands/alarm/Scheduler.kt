@@ -10,6 +10,9 @@ import tw.memo.errands.data.AppDb
 import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.logic.Sale
+import android.os.Bundle
+import java.time.LocalDate
 import tw.memo.errands.ui.MainActivity
 import java.time.LocalDateTime
 import java.time.ZoneId
@@ -27,6 +30,21 @@ object Scheduler {
     const val KIND_NIGHT = "night"
     const val KIND_PURCHASE = "purchase"
     const val SNOOZE_MINUTES = 10L
+    const val EXTRA_EV = "ev"
+    const val EXTRA_EV_DATE = "evDate"
+    const val EXTRA_EV_NIGHT = "evNight"
+
+    /** 採購提醒事件（開始/結束/單日、事件日期、是否前一晚）放進 Intent extras。 */
+    fun evBundle(r: Sale.Reminder): Bundle = Bundle().apply {
+        putString(EXTRA_EV, r.event.name); putString(EXTRA_EV_DATE, r.eventDate.toString()); putBoolean(EXTRA_EV_NIGHT, r.night)
+    }
+    fun evFrom(i: Intent?): Bundle? = i?.getStringExtra(EXTRA_EV)?.let { ev ->
+        Bundle().apply {
+            putString(EXTRA_EV, ev); putString(EXTRA_EV_DATE, i.getStringExtra(EXTRA_EV_DATE))
+            putBoolean(EXTRA_EV_NIGHT, i.getBooleanExtra(EXTRA_EV_NIGHT, false))
+        }
+    }
+    fun evDay(b: Bundle?): LocalDate? = b?.getString(EXTRA_EV_DATE)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
     private fun am(ctx: Context) = ctx.getSystemService(AlarmManager::class.java)
 
@@ -37,10 +55,11 @@ object Scheduler {
         return if (snooze) base + 50_000_000 else base
     }
 
-    fun firePi(ctx: Context, kind: String, pid: Long = 0, snooze: Boolean = false, forceAlarm: Boolean = false, test: Boolean = false): PendingIntent {
+    fun firePi(ctx: Context, kind: String, pid: Long = 0, snooze: Boolean = false, forceAlarm: Boolean = false, test: Boolean = false, ev: Bundle? = null): PendingIntent {
         val i = Intent(ctx, AlarmReceiver::class.java).setAction(ACTION_FIRE)
             .putExtra(EXTRA_KIND, kind).putExtra(EXTRA_PID, pid)
             .putExtra(EXTRA_FORCE_ALARM, forceAlarm).putExtra(EXTRA_TEST, test)
+        if (ev != null) i.putExtras(ev)
         val rc = if (test) 9_000_000 + kind.hashCode() % 1000 else requestCode(kind, pid, snooze)
         return PendingIntent.getBroadcast(ctx, rc, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
     }
@@ -84,10 +103,10 @@ object Scheduler {
         val nightDays = prefs.nightDays
         val ids = mutableSetOf<Long>()
         AppDb.get(ctx).dao().purchases().forEach { p ->
-            val t = Logic.purchaseTrigger(p, now, dayTime, nightTime) ?: return@forEach
-            // 前一天晚上的提醒已合併在晚上確認裡（明天打折要買），不重複跳。
-            if (p.date == t.toLocalDate().plusDays(1).toString() && Logic.coveredByNight(t, nightTime, nightDays)) return@forEach
-            setAt(ctx, toMillis(t), firePi(ctx, KIND_PURCHASE, p.id), p.mode == Mode.ALARM)
+            // 一個項目同時只排下一個提醒；觸發後再排下一個。前一晚的提醒若晚上確認會響，就合併在晚上確認（明天特價），不重複跳。
+            val r = Sale.next(p, now, dayTime, nightTime) { it.night && Logic.coveredByNight(it.at, nightTime, nightDays) }
+                ?: return@forEach
+            setAt(ctx, toMillis(r.at), firePi(ctx, KIND_PURCHASE, p.id, ev = evBundle(r)), p.mode == Mode.ALARM)
             ids += p.id
         }
         prefs.scheduledPurchaseIds = ids
@@ -99,9 +118,9 @@ object Scheduler {
         schedulePurchases(ctx)
     }
 
-    fun snooze(ctx: Context, kind: String, pid: Long) {
+    fun snooze(ctx: Context, kind: String, pid: Long, ev: Bundle? = null) {
         val at = System.currentTimeMillis() + SNOOZE_MINUTES * 60_000
-        setAt(ctx, at, firePi(ctx, kind, pid, snooze = true, forceAlarm = true), true)
+        setAt(ctx, at, firePi(ctx, kind, pid, snooze = true, forceAlarm = true, ev = ev), true)
     }
 
     /** 設定頁的測試：幾秒後用真的排程路徑觸發。 */

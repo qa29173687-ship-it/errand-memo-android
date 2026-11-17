@@ -14,8 +14,8 @@ android {
         applicationId = "tw.memo.errands"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
     }
     signingConfigs {
         if (ksProps.isNotEmpty()) create("release") {
@@ -60,4 +60,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.foundation:foundation")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
 }

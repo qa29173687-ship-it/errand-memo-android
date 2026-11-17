@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import tw.memo.errands.ui.MainActivity
 import tw.memo.errands.data.Repo
+import tw.memo.errands.logic.Sale
+import java.time.LocalDate
 import android.widget.Toast
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -47,6 +49,9 @@ class AlarmActivity : ComponentActivity() {
         val kind = i.getStringExtra(Scheduler.EXTRA_KIND) ?: ""
         val pid = i.getLongExtra(Scheduler.EXTRA_PID, 0)
         val target = i.getStringExtra(Notifier.EXTRA_TARGET) ?: Notifier.TARGET_TODAY
+        val ev = Scheduler.evFrom(i)
+        val today = LocalDate.now()
+        val addDay = Scheduler.evDay(ev)?.takeIf { !it.isBefore(today) } ?: today
         val now = LocalTime.now()
         setContent {
             MaterialTheme {
@@ -70,18 +75,18 @@ class AlarmActivity : ComponentActivity() {
                             Notifier.cancel(this@AlarmActivity, nid)
                             val app = applicationContext
                             CoroutineScope(Dispatchers.IO).launch {
-                                val added = Repo.addPurchaseToToday(app, pid)
+                                val added = Repo.addPurchaseToDay(app, pid, addDay)
                                 launch(Dispatchers.Main) {
-                                    Toast.makeText(app, if (added) "已加入今天下班要做" else "今天下班要做裡已經有了", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(app, if (added) "已" + Sale.addLabel(addDay, today).removePrefix("加入").let { "加入$it" } else "下班要做裡已經有了", Toast.LENGTH_SHORT).show()
                                 }
                             }
                             finish()
-                        }, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text("加入今天下班要做", fontSize = 18.sp) }
+                        }, modifier = Modifier.fillMaxWidth().height(56.dp)) { Text(Sale.addLabel(addDay, today), fontSize = 18.sp) }
                     }
                     Spacer(Modifier.height(12.dp))
                     OutlinedButton(onClick = {
                         Notifier.cancel(this@AlarmActivity, nid)
-                        if (kind.isNotEmpty() && !kind.startsWith("test")) Scheduler.snooze(this@AlarmActivity, kind, pid)
+                        if (kind.isNotEmpty() && !kind.startsWith("test")) Scheduler.snooze(this@AlarmActivity, kind, pid, ev)
                         finish()
                     }, modifier = Modifier.fillMaxWidth().height(56.dp)) {
                         Text("稍後 ${Scheduler.SNOOZE_MINUTES} 分鐘", color = Color.White, fontSize = 18.sp)

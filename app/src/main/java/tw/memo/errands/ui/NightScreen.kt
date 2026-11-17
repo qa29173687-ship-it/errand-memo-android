@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import tw.memo.errands.data.*
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.logic.Sale
 import java.time.LocalDate
 
 /** 晚上確認：今天沒做完的要不要延到明天 + 明天下班要做。 */
@@ -29,7 +30,7 @@ fun NightScreen(today: LocalDate, onClose: () -> Unit) {
     val pending = Logic.pendingToday(all, today)
     val tomorrow = Logic.dueTomorrow(all, today)
     val purchases by remember { dao.purchasesFlow() }.collectAsState(initial = emptyList())
-    val buys = Logic.purchasesTomorrow(purchases, today)
+    val sales = Sale.eventsOn(purchases, today.plusDays(1))
     fun io(block: suspend () -> Unit) = scope.launch(Dispatchers.IO) { block() }
     suspend fun deferOne(e: Errand) {
         Logic.defer(e, today, System.currentTimeMillis()).forEach { if (it.id == 0L) dao.insert(it) else dao.update(it) }
@@ -87,15 +88,17 @@ fun NightScreen(today: LocalDate, onClose: () -> Unit) {
             }
             item {
                 Spacer(Modifier.height(8.dp))
-                Text("明天打折要買", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                Text("明天特價", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }
-            if (buys.isEmpty()) item { Text("採購清單裡沒有明天的項目。", color = Muted) }
-            items(buys, key = { "b" + it.id }) { p ->
+            if (sales.isEmpty()) item { Text("採購清單裡沒有明天開始或結束的特價。", color = Muted) }
+            items(sales, key = { "b" + it.first.id + it.second.name }) { (p, ev) ->
                 val linked = all.any { it.purchaseId == p.id && it.doneOn == null }
                 Card(Modifier.fillMaxWidth()) {
                     Row(Modifier.padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text("🛒 " + p.title, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                            Text(Sale.tomorrowLabel(ev) + " · " + Sale.rangeLabel(p), fontSize = 13.sp,
+                                color = if (ev == Sale.Event.START) Accent else Danger, fontWeight = FontWeight.Medium)
                             if (p.note.isNotBlank()) Text(p.note, fontSize = 13.sp, color = Muted)
                         }
                         TextButton(enabled = !linked, onClick = { io { Repo.addPurchaseToDay(ctx, p.id, today.plusDays(1)) } }) {

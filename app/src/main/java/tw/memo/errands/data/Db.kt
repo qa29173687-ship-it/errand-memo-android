@@ -17,7 +17,7 @@ interface MemoDao {
     @Query("DELETE FROM errands WHERE repeat = 'once' AND doneOn IS NOT NULL AND dueDate < :before")
     suspend fun purgeOldDone(before: String)
 
-    @Query("SELECT * FROM purchases ORDER BY date, createdAt") fun purchasesFlow(): Flow<List<Purchase>>
+    @Query("SELECT * FROM purchases ORDER BY startDate, createdAt") fun purchasesFlow(): Flow<List<Purchase>>
     @Query("SELECT * FROM purchases") suspend fun purchases(): List<Purchase>
     @Query("SELECT * FROM purchases WHERE id = :id") suspend fun purchase(id: Long): Purchase?
     @Insert suspend fun insert(p: Purchase): Long
@@ -30,7 +30,7 @@ interface MemoDao {
     @Delete suspend fun delete(f: Frequent)
 }
 
-@Database(entities = [Errand::class, Purchase::class, Frequent::class], version = 2, exportSchema = false)
+@Database(entities = [Errand::class, Purchase::class, Frequent::class], version = 3, exportSchema = false)
 abstract class AppDb : RoomDatabase() {
     abstract fun dao(): MemoDao
 
@@ -38,7 +38,13 @@ abstract class AppDb : RoomDatabase() {
         /** v1.0.1：採購提醒預設改成「前一天晚上」。v1.0.0 的「當天」(0，當時的預設) 改成 1；3/7 天保留（改在晚上提醒）。資料全部保留。 */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("UPDATE purchases SET remindDays = 1 WHERE remindDays = 0")
+                MigrationSql.V1_TO_V2.forEach { db.execSQL(it) }
+            }
+        }
+        /** v1.0.2：採購清單改成「特價期間／不設期限」，舊資料轉換不遺失。 */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MigrationSql.V2_TO_V3.forEach { db.execSQL(it) }
             }
         }
         @Volatile private var inst: AppDb? = null
@@ -52,7 +58,7 @@ abstract class AppDb : RoomDatabase() {
                             }
                     }
                 })
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .build().also { inst = it }
         }
     }

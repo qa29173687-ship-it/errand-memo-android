@@ -78,57 +78,25 @@ object Logic {
         return null
     }
 
-    fun purchaseRemindDate(p: Purchase): LocalDate = LocalDate.parse(p.date).minusDays(p.remindDays.toLong())
-
-    /** 採購提醒時間。remindDays=0 → 當天 dayTime；≥1 → (日期-N天) 的 nightTime。
-     *  若已錯過（例如太晚才新增），改成下一個「到日期前一晚為止的 nightTime」或「當天 dayTime」中最早的。已買/過期 → null。 */
-    fun purchaseTrigger(p: Purchase, now: LocalDateTime, dayTime: LocalTime, nightTime: LocalTime): LocalDateTime? {
-        if (p.boughtOn != null) return null
-        val date = runCatching { LocalDate.parse(p.date) }.getOrNull() ?: return null
-        val first = if (p.remindDays <= 0) date.atTime(dayTime) else purchaseRemindDate(p).atTime(nightTime)
-        if (first.isAfter(now)) return first
-        val candidates = mutableListOf(date.atTime(dayTime))
-        if (p.remindDays > 0) {
-            var d = now.toLocalDate()
-            while (d.isBefore(date)) { candidates += d.atTime(nightTime); d = d.plusDays(1) }
-        }
-        return candidates.filter { it.isAfter(now) }.minOrNull()
-    }
-
     /** 這個採購提醒時間剛好是晚上確認會響的時候 → 合併到晚上確認，不另外跳。 */
     fun coveredByNight(trigger: LocalDateTime, nightTime: LocalTime, nightDays: Set<Int>): Boolean =
         trigger.toLocalTime() == nightTime && dow(trigger.toLocalDate()) in nightDays
 
-    /** 明天打折要買（未買、日期 = 明天）。 */
-    fun purchasesTomorrow(list: List<Purchase>, today: LocalDate): List<Purchase> =
-        list.filter { it.boughtOn == null && it.date == today.plusDays(1).toString() }
-
-    /** 晚上確認的標題與內容；三邊都空回傳 null（不提醒）。 */
-    fun nightMessage(pending: List<Errand>, tomorrow: List<Errand>, buys: List<Purchase>): Pair<String, String>? {
-        if (pending.isEmpty() && tomorrow.isEmpty() && buys.isEmpty()) return null
+    /** 晚上確認的標題與內容；全部都空回傳 null（不提醒）。sales = 明天有特價事件的採購項目。 */
+    fun nightMessage(pending: List<Errand>, tomorrow: List<Errand>, sales: List<Pair<Purchase, Sale.Event>>): Pair<String, String>? {
+        if (pending.isEmpty() && tomorrow.isEmpty() && sales.isEmpty()) return null
         fun el(l: List<Errand>) = l.joinToString("\n") { "【${typeLabel(it.type)}】${it.title}" }
         val parts = mutableListOf<String>()
         if (pending.isNotEmpty()) parts += "還沒做完（${pending.size}）：\n" + el(pending)
         if (tomorrow.isNotEmpty()) parts += "明天下班要做（${tomorrow.size}）：\n" + el(tomorrow)
-        if (buys.isNotEmpty()) parts += "明天打折要買（${buys.size}）：\n" + buys.joinToString("\n") { "🛒 ${it.title}" }
+        if (sales.isNotEmpty()) parts += "明天特價（${sales.size}）：\n" +
+            sales.joinToString("\n") { (p, ev) -> "🛒 ${p.title}（${Sale.tomorrowLabel(ev)}）" }
         val title = if (pending.isNotEmpty()) "這些還沒做完，要延到明天嗎？"
         else listOfNotNull(
             if (tomorrow.isNotEmpty()) "下班要做 ${tomorrow.size} 項" else null,
-            if (buys.isNotEmpty()) "打折要買 ${buys.size} 項" else null,
+            if (sales.isNotEmpty()) "特價 ${sales.size} 項" else null,
         ).joinToString("・", prefix = "明天：")
         return title to parts.joinToString("\n\n")
-    }
-
-    enum class PStatus { UPCOMING, TODAY, OVERDUE, BOUGHT }
-
-    fun purchaseStatus(p: Purchase, today: LocalDate): PStatus {
-        if (p.boughtOn != null) return PStatus.BOUGHT
-        val d = LocalDate.parse(p.date)
-        return when {
-            d.isBefore(today) -> PStatus.OVERDUE
-            d == today -> PStatus.TODAY
-            else -> PStatus.UPCOMING
-        }
     }
 
     fun daysBetween(a: LocalDate, b: LocalDate): Long = ChronoUnit.DAYS.between(a, b)
@@ -164,20 +132,6 @@ object Logic {
         }
     }
 
-    fun purchaseDateLabel(p: Purchase, today: LocalDate): String {
-        val d = LocalDate.parse(p.date)
-        val n = daysBetween(today, d)
-        val rel = when {
-            n == 0L -> "今天"
-            n == 1L -> "明天"
-            n > 1 -> "還有 $n 天"
-            else -> "已過 ${-n} 天"
-        }
-        return "${shortDate(d)}（$rel）"
-    }
-
-    fun remindLabel(days: Int): String = when { days <= 0 -> "當天早上"; days == 1 -> "前一天晚上"; else -> "前 $days 天晚上" }
-
     fun typeLabel(type: String): String = if (type == "buy") "買" else "拿"
 
     /** 依標題猜類型：「買…」或含「加油」→ 買，其他 → 拿。 */
@@ -208,7 +162,4 @@ object Logic {
             }
         }
 
-    /** 採購提醒標題：到了日期 → 打折了；提前提醒 → 快打折了。 */
-    fun purchaseAlertTitle(p: Purchase, today: LocalDate): String =
-        if (!LocalDate.parse(p.date).isAfter(today)) "打折了：${p.title}" else "快打折了：${p.title}"
 }
