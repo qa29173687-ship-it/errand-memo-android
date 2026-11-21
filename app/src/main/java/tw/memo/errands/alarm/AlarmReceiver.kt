@@ -11,6 +11,7 @@ import tw.memo.errands.data.Errand
 import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.data.Repo
+import tw.memo.errands.widget.WidgetRefresher
 import tw.memo.errands.data.PKind
 import tw.memo.errands.data.Timing
 import tw.memo.errands.logic.Sale
@@ -66,6 +67,10 @@ class AlarmReceiver : BroadcastReceiver() {
             val dao = AppDb.get(ctx).dao()
             val today = LocalDate.now()
             when (kind) {
+                Scheduler.KIND_MIDNIGHT -> {
+                    Scheduler.scheduleMidnight(ctx)
+                    WidgetRefresher.refresh(ctx)
+                }
                 Scheduler.KIND_EVENING -> {
                     if (!forceAlarm) Scheduler.scheduleSlot(ctx, kind) // 排下一次
                     val items = Logic.pendingToday(dao.errands(), today)
@@ -75,6 +80,7 @@ class AlarmReceiver : BroadcastReceiver() {
                 }
                 Scheduler.KIND_NIGHT -> {
                     if (!forceAlarm) Scheduler.scheduleSlot(ctx, kind)
+                    WidgetRefresher.refresh(ctx)
                     val all = dao.errands()
                     val sales = Sale.eventsOn(dao.purchases(), today.plusDays(1))
                     val (title, text) = Logic.nightMessage(Logic.pendingToday(all, today), Logic.dueTomorrow(all, today), sales) ?: return

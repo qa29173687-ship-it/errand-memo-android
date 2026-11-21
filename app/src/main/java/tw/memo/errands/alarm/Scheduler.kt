@@ -11,6 +11,7 @@ import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
 import tw.memo.errands.logic.Sale
+import tw.memo.errands.widget.WidgetRefresher
 import android.os.Bundle
 import java.time.LocalDate
 import tw.memo.errands.ui.MainActivity
@@ -29,6 +30,7 @@ object Scheduler {
     const val KIND_EVENING = "evening"
     const val KIND_NIGHT = "night"
     const val KIND_PURCHASE = "purchase"
+    const val KIND_MIDNIGHT = "midnight"
     const val SNOOZE_MINUTES = 10L
     const val EXTRA_EV = "ev"
     const val EXTRA_EV_DATE = "evDate"
@@ -51,7 +53,7 @@ object Scheduler {
     fun canExact(ctx: Context): Boolean = Build.VERSION.SDK_INT < 31 || am(ctx).canScheduleExactAlarms()
 
     fun requestCode(kind: String, pid: Long, snooze: Boolean): Int {
-        val base = when (kind) { KIND_EVENING -> 1; KIND_NIGHT -> 2; else -> 100_000 + pid.toInt() }
+        val base = when (kind) { KIND_EVENING -> 1; KIND_NIGHT -> 2; KIND_MIDNIGHT -> 3; else -> 100_000 + pid.toInt() }
         return if (snooze) base + 50_000_000 else base
     }
 
@@ -112,7 +114,17 @@ object Scheduler {
         prefs.scheduledPurchaseIds = ids
     }
 
+    /** 每天 00:00 過後更新小工具（換成新的一天的清單）。不需精確，允許系統延後幾分鐘。 */
+    fun scheduleMidnight(ctx: Context) {
+        val next = LocalDate.now().plusDays(1).atTime(0, 0, 30)
+        val pi = firePi(ctx, KIND_MIDNIGHT)
+        am(ctx).cancel(pi)
+        am(ctx).setWindow(AlarmManager.RTC_WAKEUP, toMillis(next), 10 * 60_000L, pi)
+    }
+
     suspend fun rescheduleAll(ctx: Context) {
+        scheduleMidnight(ctx)
+        WidgetRefresher.refresh(ctx)
         scheduleSlot(ctx, KIND_EVENING)
         scheduleSlot(ctx, KIND_NIGHT)
         schedulePurchases(ctx)

@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.Flow
 interface MemoDao {
     @Query("SELECT * FROM errands ORDER BY createdAt") fun errandsFlow(): Flow<List<Errand>>
     @Query("SELECT * FROM errands") suspend fun errands(): List<Errand>
+    @Query("SELECT * FROM errands WHERE id = :id") suspend fun errand(id: Long): Errand?
+    @Query("SELECT * FROM frequent ORDER BY sort, id") suspend fun frequent(): List<Frequent>
     @Insert suspend fun insert(e: Errand): Long
     @Update suspend fun update(e: Errand)
     @Delete suspend fun delete(e: Errand)
