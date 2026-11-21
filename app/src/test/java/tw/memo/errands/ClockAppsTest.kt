@@ -35,4 +35,17 @@ class ClockAppsTest {
         assertNull(ClockApps.decode(null))
         assertNull(ClockApps.decode("z|a|b"))
     }
+
+    @Test fun systemChoiceAndClockLabels() {
+        assertEquals(ClockApps.SYSTEM, ClockApps.decode(ClockApps.encode(ClockApps.SYSTEM)))
+        assertEquals(ClockApps.SYSTEM, ClockApps.pickAutoOrSystem(emptyList(), emptyList()))
+        assertTrue(ClockApps.looksLikeClock("時鐘", "com.x"))
+        assertTrue(ClockApps.looksLikeClock("Alarm", "com.x"))
+        assertTrue(ClockApps.looksLikeClock("工具", "com.oplus.clock"))
+        assertFalse(ClockApps.looksLikeClock("LINE", "jp.naver.line"))
+        val opts = listOf(ClockApps.Option(Choice("b", null, false), "Zebra", 1), ClockApps.Option(Choice("c", null, false), "時鐘", 0),
+            ClockApps.Option(Choice("a", null, false), "apple", 1))
+        assertEquals(listOf("c", "a", "b"), ClockApps.sortOptions(opts).map { it.choice.pkg })
+        assertEquals(listOf("c"), ClockApps.filter(opts, "時鐘").map { it.choice.pkg })
+    }
 }

@@ -41,7 +41,25 @@ class ClockResolveTest {
         assertEquals("com.coloros.alarmclock", ClockApps.options(ctx).first().choice.pkg)
     }
 
-    @Test fun noClockAppReturnsNull() {
-        assertNull(ClockApps.intent(ctx, ""))
+    @Test fun noClockAppFallsBackToSystemShowAlarms() {
+        val i = ClockApps.intent(ctx, "")!!
+        assertNull(i.component)
+        assertEquals(android.provider.AlarmClock.ACTION_SHOW_ALARMS, i.action)
+        assertEquals("系統鬧鐘（自動）", ClockApps.label(ctx, ClockApps.current(ctx, "")))
+    }
+
+    @Test fun systemLauncherClockWithoutShowAlarmsIsListedFirst() {
+        val spm = shadowOf(ctx.packageManager)
+        val clock = ComponentName("com.oplus.newclock", "com.oplus.newclock.Main")
+        val other = ComponentName("com.example.app", "com.example.app.Main")
+        for (c in listOf(other, clock)) {
+            spm.addActivityIfNotPresent(c)
+            spm.addIntentFilterForActivity(c, IntentFilter(Intent.ACTION_MAIN).apply { addCategory(Intent.CATEGORY_LAUNCHER) })
+        }
+        val opts = ClockApps.options(ctx)
+        assertTrue(opts.any { it.choice.pkg == "com.example.app" })
+        assertEquals("com.oplus.newclock", opts.first().choice.pkg) // 套件名含 clock → 排前面
+        assertEquals(1, ClockApps.filter(opts, "newclock").size)
+        assertTrue(ClockApps.diagnostics(ctx, "").contains("SHOW_ALARMS=無"))
     }
 }

@@ -6,7 +6,9 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
@@ -183,13 +185,14 @@ private fun WidgetCard(prefs: Prefs, resumeTick: Int, onChanged: () -> Unit) {
 fun appVersion(ctx: android.content.Context): String =
     runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?"
 
-/** 點小工具時間要打開哪個 App：顯示偵測結果、可自選、可測試。 */
+/** 點小工具時間要打開哪個 App：顯示偵測結果、可自選（可搜尋）、可測試，另有診斷資訊。 */
 @Composable
 private fun ClockRow(prefs: Prefs, onChanged: () -> Unit) {
     val ctx = LocalContext.current
     var pref by remember { mutableStateOf(prefs.clockApp) }
     val current = remember(pref) { ClockApps.current(ctx, pref) }
     var picking by remember { mutableStateOf(false) }
+    var diag by remember { mutableStateOf(false) }
     Text("⏰ 點時間打開", fontSize = 13.sp, fontWeight = FontWeight.Bold)
     Text(ClockApps.label(ctx, current) + if (pref.isBlank()) "（自動偵測）" else "（自己選的）", fontSize = 15.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -200,21 +203,39 @@ private fun ClockRow(prefs: Prefs, onChanged: () -> Unit) {
             if (!ok) Toast.makeText(ctx, "打不開，請按「選擇 App」換一個試試", Toast.LENGTH_LONG).show()
         }, modifier = Modifier.weight(1f)) { Text("測試") }
     }
+    Text(if (diag) "隱藏診斷資訊" else "顯示診斷資訊", fontSize = 12.sp, color = Muted,
+        modifier = Modifier.clickable { diag = !diag }.padding(vertical = 2.dp))
+    if (diag) {
+        val d = remember(pref) { ClockApps.diagnostics(ctx, pref) }
+        SelectionContainer { Text(d, fontSize = 11.sp, color = Muted) }
+    }
     if (picking) {
         val opts = remember { ClockApps.options(ctx) }
+        var q by remember { mutableStateOf("") }
+        val shown = remember(q) { ClockApps.filter(opts, q) }
         AlertDialog(onDismissRequest = { picking = false }, confirmButton = {}, dismissButton = { TextButton({ picking = false }) { Text("取消") } },
             title = { Text("點時間要打開") },
             text = {
-                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                    fun pick(v: String) { pref = v; prefs.clockApp = v; picking = false; onChanged() }
-                    TextButton({ pick("") }, Modifier.fillMaxWidth()) { Text("自動偵測（建議）", Modifier.fillMaxWidth()) }
-                    var lastSection = -1
-                    for (o in opts) {
-                        if (o.section != lastSection) {
-                            lastSection = o.section
-                            Text(if (o.section == 0) "時鐘／鬧鐘" else "其他 App", fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 8.dp))
+                Column {
+                    OutlinedTextField(q, { q = it }, Modifier.fillMaxWidth(), singleLine = true,
+                        placeholder = { Text("搜尋 App，例如：時鐘") })
+                    Column(Modifier.heightIn(max = 380.dp).verticalScroll(rememberScrollState())) {
+                        fun pick(v: String) { pref = v; prefs.clockApp = v; picking = false; onChanged() }
+                        if (q.isBlank()) {
+                            TextButton({ pick("") }, Modifier.fillMaxWidth()) { Text("自動偵測（建議）", Modifier.fillMaxWidth()) }
+                            TextButton({ pick(ClockApps.encode(ClockApps.SYSTEM)) }, Modifier.fillMaxWidth()) {
+                                Text("⏰ 系統鬧鐘（自動，交給手機決定）", Modifier.fillMaxWidth())
+                            }
                         }
-                        TextButton({ pick(ClockApps.encode(o.choice)) }, Modifier.fillMaxWidth()) { Text(o.label, Modifier.fillMaxWidth()) }
+                        var lastSection = -1
+                        for (o in shown) {
+                            if (o.section != lastSection) {
+                                lastSection = o.section
+                                Text(if (o.section == 0) "時鐘／鬧鐘" else "其他 App", fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 8.dp))
+                            }
+                            TextButton({ pick(ClockApps.encode(o.choice)) }, Modifier.fillMaxWidth()) { Text(o.label, Modifier.fillMaxWidth()) }
+                        }
+                        if (shown.isEmpty()) Text("找不到「$q」", fontSize = 13.sp, color = Muted, modifier = Modifier.padding(8.dp))
                     }
                 }
             })

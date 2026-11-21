@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 側載用（不上架 Play）：讓「點時間打開」可以列出手機上所有 App，包括系統時鐘 -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        xmlns:tools="http://schemas.android.com/tools" tools:ignore="QueryAllPackagesPermission" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
@@ -10,10 +13,15 @@
     <!-- 點小工具時間 → 打開手機內建時鐘；設定裡可以從桌面上的 App 挑一個 -->
     <queries>
         <intent><action android:name="android.intent.action.SHOW_ALARMS" /></intent>
+        <intent><action android:name="android.intent.action.SET_ALARM" /></intent>
+        <intent><action android:name="android.intent.action.SHOW_TIMERS" /></intent>
+        <intent><action android:name="android.intent.action.SET_TIMER" /></intent>
         <intent><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent>
         <package android:name="com.coloros.alarmclock" />
         <package android:name="com.oplus.alarmclock" />
         <package android:name="com.oppo.alarmclock" />
+        <package android:name="com.oplus.clock" />
+        <package android:name="com.coloros.clock" />
         <package android:name="com.google.android.deskclock" />
         <package android:name="com.sec.android.app.clockpackage" />
         <package android:name="com.android.deskclock" />
