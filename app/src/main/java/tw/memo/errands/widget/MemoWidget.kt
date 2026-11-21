@@ -96,8 +96,9 @@ open class MemoWidget(private val forceLarge: Boolean = false) : GlanceAppWidget
             .putExtra(Notifier.EXTRA_TARGET, Notifier.TARGET_TODAY)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
-        /** 點時間要打開的時鐘（依設定/自動偵測）；找不到就回 null。 */
-        fun clockIntent(ctx: Context, pref: String? = Prefs(ctx).clockApp): Intent? = ClockApps.intent(ctx, pref)
+        /** 點時間：先開透明跳板 ClockLaunchActivity，由它依序嘗試打開時鐘（跟設定裡的「測試」同一條路）。 */
+        fun clockIntent(ctx: Context): Intent = Intent(ctx, ClockLaunchActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION)
         const val RC_APP = 7100
         const val RC_CLOCK = 7101
     }
@@ -121,8 +122,8 @@ open class MemoWidget(private val forceLarge: Boolean = false) : GlanceAppWidget
         val ctx = LocalContext.current
         val size = LocalSize.current
         val m = WidgetStyle.metrics(size.width.value, size.height.value, if (Build.VERSION.SDK_INT >= 31) WidgetStyle.TIGHTEN else 0f, forceLarge)
-        val clockI = remember(clockPref) { clockIntent(ctx, clockPref) }
-        val clockAction = actionStartActivity(clockI ?: appIntent(ctx))
+        val clockI = remember(clockPref) { clockIntent(ctx) }
+        val clockAction = actionStartActivity(clockI)
         val today = LocalDate.now()
         val s = WidgetLogic.state(all, today, null)
         val light = WidgetStyle.palette(false, alpha)

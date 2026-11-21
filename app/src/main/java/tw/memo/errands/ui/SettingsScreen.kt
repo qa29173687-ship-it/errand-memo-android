@@ -27,6 +27,7 @@ import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
 import tw.memo.errands.widget.ClockApps
+import tw.memo.errands.widget.MemoWidget
 import tw.memo.errands.widget.WidgetPin
 import tw.memo.errands.widget.WidgetPrefsBus
 import tw.memo.errands.widget.WidgetRefresher
@@ -175,7 +176,7 @@ private fun WidgetCard(prefs: Prefs, resumeTick: Int, onChanged: () -> Unit) {
                 }, modifier = Modifier.weight(1f)) { Text(label) }
             }
             HorizontalDivider()
-            ClockRow(prefs) { apply() }
+            ClockRow(prefs, resumeTick) { apply() }
             HorizontalDivider()
             Text("也可以：長按桌面空白處 → 小工具 → 順便備忘，選「4×2」或「4×4」。小工具是在「桌面」上，不在 App 裡面。點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
         }
@@ -187,9 +188,9 @@ fun appVersion(ctx: android.content.Context): String =
 
 /** 點小工具時間要打開哪個 App：顯示偵測結果、可自選（可搜尋）、可測試，另有診斷資訊。 */
 @Composable
-private fun ClockRow(prefs: Prefs, onChanged: () -> Unit) {
+private fun ClockRow(prefs: Prefs, resumeTick: Int, onChanged: () -> Unit) {
     val ctx = LocalContext.current
-    var pref by remember { mutableStateOf(prefs.clockApp) }
+    var pref by remember { mutableStateOf(ClockApps.migrate(prefs.clockApp).also { if (it != prefs.clockApp) prefs.clockApp = it }) }
     val current = remember(pref) { ClockApps.current(ctx, pref) }
     var picking by remember { mutableStateOf(false) }
     var diag by remember { mutableStateOf(false) }
@@ -197,16 +198,13 @@ private fun ClockRow(prefs: Prefs, onChanged: () -> Unit) {
     Text(ClockApps.label(ctx, current) + if (pref.isBlank()) "（自動偵測）" else "（自己選的）", fontSize = 15.sp)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(onClick = { picking = true }, modifier = Modifier.weight(1f)) { Text("選擇 App") }
-        OutlinedButton(onClick = {
-            val i = ClockApps.intent(ctx, pref)
-            val ok = i != null && runCatching { ctx.startActivity(i) }.isSuccess
-            if (!ok) Toast.makeText(ctx, "打不開，請按「選擇 App」換一個試試", Toast.LENGTH_LONG).show()
-        }, modifier = Modifier.weight(1f)) { Text("測試") }
+        // 跟小工具點時間完全同一條路：開跳板 ClockLaunchActivity
+        OutlinedButton(onClick = { runCatching { ctx.startActivity(MemoWidget.clockIntent(ctx)) } }, modifier = Modifier.weight(1f)) { Text("測試") }
     }
     Text(if (diag) "隱藏診斷資訊" else "顯示診斷資訊", fontSize = 12.sp, color = Muted,
         modifier = Modifier.clickable { diag = !diag }.padding(vertical = 2.dp))
     if (diag) {
-        val d = remember(pref) { ClockApps.diagnostics(ctx, pref) }
+        val d = remember(pref, resumeTick) { ClockApps.diagnostics(ctx, pref) }
         SelectionContainer { Text(d, fontSize = 11.sp, color = Muted) }
     }
     if (picking) {

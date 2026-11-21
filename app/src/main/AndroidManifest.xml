@@ -64,6 +64,13 @@
             android:turnScreenOn="true"
             android:taskAffinity="tw.memo.errands.alarm" />
         <activity
+            android:name=".widget.ClockLaunchActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity="tw.memo.errands.clock"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+        <activity
             android:name=".widget.QuickAddActivity"
             android:exported="false"
             android:excludeFromRecents="true"

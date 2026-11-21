@@ -48,6 +48,10 @@ class Prefs(ctx: Context) {
     var clockApp: String
         get() = sp.getString("clockApp", "")!!
         set(v) = sp.edit().putString("clockApp", v).apply()
+    /** 上次點時間（小工具或測試）的嘗試結果，給診斷資訊看。 */
+    var clockLastLaunch: String
+        get() = sp.getString("clockLastLaunch", "")!!
+        set(v) = sp.edit().putString("clockLastLaunch", v).commit().let { }
 
     var askedNotifPermission: Boolean
         get() = sp.getBoolean("askedNotif", false)
