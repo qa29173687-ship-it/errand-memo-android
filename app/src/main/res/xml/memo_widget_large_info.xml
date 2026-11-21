@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×4：一律用大版面（備註＋今天完成 N/M） -->
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:minWidth="250dp" android:minHeight="250dp"
+    android:minResizeWidth="250dp" android:minResizeHeight="180dp"
+    android:maxResizeWidth="600dp" android:maxResizeHeight="720dp"
+    android:targetCellWidth="4" android:targetCellHeight="4"
+    android:resizeMode="horizontal|vertical"
+    android:widgetCategory="home_screen"
+    android:updatePeriodMillis="3600000"
+    android:initialLayout="@layout/glance_default_loading_layout"
+    android:previewImage="@drawable/widget_preview_large"
+    android:description="@string/widget_desc_large" />

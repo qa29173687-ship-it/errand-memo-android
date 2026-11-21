@@ -30,14 +30,15 @@ import java.time.LocalDate
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], qualifiers = "zh-rTW-w411dp-h891dp-xxhdpi")
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
+@org.robolectric.annotation.SQLiteMode(org.robolectric.annotation.SQLiteMode.Mode.LEGACY)
 class WidgetRenderTest {
     private val ctx: Context = ApplicationProvider.getApplicationContext()
 
     private fun all(v: View): List<View> = if (v is ViewGroup) listOf(v) + (0 until v.childCount).flatMap { all(v.getChildAt(it)) } else listOf(v)
 
     @OptIn(ExperimentalGlanceApi::class)
-    private fun render(w: Int, h: Int, name: String): View = runBlocking {
-        val rv = MemoWidget().compose(ctx, size = DpSize(w.dp, h.dp))
+    private fun render(w: Int, h: Int, name: String, widget: MemoWidget = MemoWidget()): View = runBlocking {
+        val rv = widget.compose(ctx, size = DpSize(w.dp, h.dp))
         val act = org.robolectric.Robolectric.buildActivity(android.app.Activity::class.java).setup().get()
         val parent = FrameLayout(act)
         act.setContentView(parent)
@@ -72,8 +73,8 @@ class WidgetRenderTest {
             dao.insert(Errand(title = "買牛奶", type = "buy", note = "全聯", dueDate = today, createdAt = 1))
             dao.insert(Errand(title = "拿包裹", type = "take", note = "7-11", dueDate = today, createdAt = 2))
         }
-        for ((w, h, n) in listOf(Triple(360, 180, "w-4x2"), Triple(360, 400, "w-4x4"))) {
-            val v = render(w, h, n)
+        for ((w, h, n) in listOf(Triple(360, 180, "w-4x2"), Triple(360, 400, "w-4x4"), Triple(360, 260, "w-4x4-provider"))) {
+            val v = render(w, h, n, if (n == "w-4x4-provider") tw.memo.errands.widget.MemoWidgetLarge() else MemoWidget())
             val views = all(v)
             val clocks = views.filterIsInstance<android.widget.TextClock>()
             assertEquals("$n: 時、分、日期三個 TextClock", 3, clocks.size)
@@ -84,6 +85,11 @@ class WidgetRenderTest {
             // 時間區、日期都有自己的點擊
             val timeBox = clocks[0].parent as View
             assertTrue("$n: 點時間有接", timeBox.hasOnClickListeners())
+            assertTrue("$n: 時、分本身也可點", clocks[0].hasOnClickListeners() && clocks[1].hasOnClickListeners())
+            // 往上找：整個左欄的容器也要可點
+            var p: View? = timeBox; var parentsClickable = 0
+            while (p != null && p !== v) { if (p !== timeBox && p.hasOnClickListeners()) parentsClickable++; p = p.parent as? View }
+            assertTrue("$n: 左欄容器可點 ($parentsClickable)", parentsClickable >= 2)
             assertTrue("$n: 點日期有接", clocks[2].hasOnClickListeners())
             // 日期不能被擠掉、每個文字都完整在小工具裡面（沒有被裁掉）
             val d = ctx.resources.displayMetrics.density
@@ -102,7 +108,7 @@ class WidgetRenderTest {
                     y += p.top; p = p.parent as View
                 }
             }
-            if (n == "w-4x4") assertTrue("今天完成要看得到", texts.contains("今天完成"))
+            if (n != "w-4x2") assertTrue("今天完成要看得到", texts.contains("今天完成"))
             val clickable = views.count { it.hasOnClickListeners() }
             assertTrue("$n: 可點的 view 數 $clickable", clickable >= 4)
         }

@@ -44,6 +44,11 @@ class Prefs(ctx: Context) {
         get() = tw.memo.errands.widget.WidgetStyle.alphaOf(sp.getString("widgetAlpha", null))
         set(v) = sp.edit().putString("widgetAlpha", v).apply()
 
+    /** 點小工具時間要開的 App（空字串＝自動偵測），格式見 ClockApps.encode。 */
+    var clockApp: String
+        get() = sp.getString("clockApp", "")!!
+        set(v) = sp.edit().putString("clockApp", v).apply()
+
     var askedNotifPermission: Boolean
         get() = sp.getBoolean("askedNotif", false)
         set(v) = sp.edit().putBoolean("askedNotif", v).apply()

@@ -88,7 +88,7 @@ class WColors(day: WidgetStyle.Palette, night: WidgetStyle.Palette) {
 }
 
 /** 桌面小工具「今天下班順便做」：左邊大時鐘（系統 TextClock）＋右邊今天的清單。4×2 / 4×4。 */
-class MemoWidget : GlanceAppWidget() {
+open class MemoWidget(private val forceLarge: Boolean = false) : GlanceAppWidget() {
     companion object {
         val KEY_ID = ActionParameters.Key<Long>("errandId")
 
@@ -96,19 +96,10 @@ class MemoWidget : GlanceAppWidget() {
             .putExtra(Notifier.EXTRA_TARGET, Notifier.TARGET_TODAY)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
 
-        /** 手機內建的時鐘 App；都找不到就回 null。 */
-        fun clockIntent(ctx: Context): Intent? {
-            val pm = ctx.packageManager
-            val show = Intent(AlarmClock.ACTION_SHOW_ALARMS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            val resolves = runCatching { show.resolveActivity(pm) != null }.getOrDefault(false)
-            val launchable = if (resolves) emptySet() else WidgetStyle.CLOCK_PACKAGES
-                .filter { runCatching { pm.getLaunchIntentForPackage(it) != null }.getOrDefault(false) }.toSet()
-            return when (val t = WidgetStyle.chooseClock(resolves, launchable)) {
-                WidgetStyle.ClockTarget.ShowAlarms -> show
-                is WidgetStyle.ClockTarget.Package -> pm.getLaunchIntentForPackage(t.pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                WidgetStyle.ClockTarget.None -> null
-            }
-        }
+        /** 點時間要打開的時鐘（依設定/自動偵測）；找不到就回 null。 */
+        fun clockIntent(ctx: Context, pref: String? = Prefs(ctx).clockApp): Intent? = ClockApps.intent(ctx, pref)
+        const val RC_APP = 7100
+        const val RC_CLOCK = 7101
     }
 
     override val sizeMode = SizeMode.Exact
@@ -120,16 +111,18 @@ class MemoWidget : GlanceAppWidget() {
             val flow = remember { dao.errandsFlow() }
             val list by flow.collectAsState(initial)
             val v by WidgetPrefsBus.version.collectAsState()
-            val style = remember(v) { Prefs(context).let { it.widgetTint to it.widgetAlpha } }
-            Content(list, style.first, style.second)
+            val style = remember(v) { Prefs(context).let { Triple(it.widgetTint, it.widgetAlpha, it.clockApp) } }
+            Content(list, style.first, style.second, style.third)
         }
     }
 
     @Composable
-    internal fun Content(all: List<Errand>, tint: String, alpha: String) {
+    internal fun Content(all: List<Errand>, tint: String, alpha: String, clockPref: String = "") {
         val ctx = LocalContext.current
         val size = LocalSize.current
-        val m = WidgetStyle.metrics(size.width.value, size.height.value, if (Build.VERSION.SDK_INT >= 31) WidgetStyle.TIGHTEN else 0f)
+        val m = WidgetStyle.metrics(size.width.value, size.height.value, if (Build.VERSION.SDK_INT >= 31) WidgetStyle.TIGHTEN else 0f, forceLarge)
+        val clockI = remember(clockPref) { clockIntent(ctx, clockPref) }
+        val clockAction = actionStartActivity(clockI ?: appIntent(ctx))
         val today = LocalDate.now()
         val s = WidgetLogic.state(all, today, null)
         val light = WidgetStyle.palette(false, alpha)
@@ -142,10 +135,13 @@ class MemoWidget : GlanceAppWidget() {
         val bg = if (Build.VERSION.SDK_INT >= 31) GlanceModifier.background(c.bg).cornerRadius(24.dp)
         else GlanceModifier.background(ImageProvider(bgRes(tint, alpha)))
         Row(bg.then(GlanceModifier.fillMaxSize().appWidgetBackground())) {
-            Column(GlanceModifier.width(m.clockCol.dp).fillMaxHeight()
+            Column(GlanceModifier.width(m.clockCol.dp).fillMaxHeight().clickable(clockAction)
                 .padding(start = 15.dp, end = 4.dp, top = if (m.large) 16.dp else 10.dp, bottom = if (m.large) 14.dp else 10.dp) /* = PAD_V_* */,
                 verticalAlignment = if (m.large) Alignment.Top else Alignment.CenterVertically) {
-                AndroidRemoteViews(clockViews(ctx, tint, m), GlanceModifier.fillMaxWidth().height(m.clockBlock.dp))
+                // 整塊時鐘區（含空白處）都可以點 → 打開時鐘；裡面的日期另外接到順便備忘
+                Box(GlanceModifier.fillMaxWidth().height(m.clockBlock.dp).clickable(clockAction)) {
+                    AndroidRemoteViews(clockViews(ctx, tint, m, clockI), GlanceModifier.fillMaxSize())
+                }
                 if (m.large) {
                     Spacer(GlanceModifier.defaultWeight())
                     Column(GlanceModifier.fillMaxWidth().clickable(actionStartActivity(appIntent(ctx)))) {
@@ -187,22 +183,25 @@ class MemoWidget : GlanceAppWidget() {
     }
 
     /** 左欄時鐘：點時間開時鐘 App，點日期開順便備忘。 */
-    private fun clockViews(ctx: Context, tint: String, m: WidgetStyle.Metrics): RemoteViews {
+    private fun clockViews(ctx: Context, tint: String, m: WidgetStyle.Metrics, clockI: Intent?): RemoteViews {
         val layout = when (tint) {
             WidgetStyle.TINT_LIGHT -> R.layout.widget_clock_light
             WidgetStyle.TINT_DARK -> R.layout.widget_clock_dark
             else -> R.layout.widget_clock_system
         }
         val flags = PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        val app = PendingIntent.getActivity(ctx, 41, appIntent(ctx), flags)
-        val clock = clockIntent(ctx)?.let { PendingIntent.getActivity(ctx, 42, it, flags) } ?: app
+        val app = PendingIntent.getActivity(ctx, RC_APP, appIntent(ctx), flags)
+        val clock = clockI?.let { PendingIntent.getActivity(ctx, RC_CLOCK, it, flags) } ?: app
         return RemoteViews(ctx.packageName, layout).apply {
             setTextViewTextSize(R.id.clock_h, TypedValue.COMPLEX_UNIT_DIP, m.clockSp)
             setTextViewTextSize(R.id.clock_m, TypedValue.COMPLEX_UNIT_DIP, m.clockSp)
             setTextViewTextSize(R.id.clock_date, TypedValue.COMPLEX_UNIT_DIP, m.dateSp)
             if (Build.VERSION.SDK_INT >= 31 && m.tighten > 0f)
                 setViewLayoutMargin(R.id.clock_m, RemoteViews.MARGIN_TOP, -m.tighten * m.clockSp, TypedValue.COMPLEX_UNIT_DIP)
+            setOnClickPendingIntent(R.id.clock_root, clock)
             setOnClickPendingIntent(R.id.clock_time, clock)
+            setOnClickPendingIntent(R.id.clock_h, clock)
+            setOnClickPendingIntent(R.id.clock_m, clock)
             setOnClickPendingIntent(R.id.clock_date, app)
         }
     }
@@ -261,8 +260,15 @@ class MemoWidget : GlanceAppWidget() {
     }
 }
 
+/** 4×4：不管桌面回報多大，都用大版面（備註＋今天完成）。 */
+class MemoWidgetLarge : MemoWidget(forceLarge = true)
+
 class MemoWidgetReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget: GlanceAppWidget = MemoWidget()
+}
+
+class MemoWidgetLargeReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = MemoWidgetLarge()
 }
 
 /** 小工具上點圓圈：標記完成（連結的採購也會變已買），項目從小工具消失。 */
@@ -271,12 +277,13 @@ class CheckCallback : ActionCallback {
         val id = parameters[MemoWidget.KEY_ID] ?: return
         val e = AppDb.get(context).dao().errand(id) ?: return
         Repo.setErrandDone(context, e, LocalDate.now(), true)
-        MemoWidget().update(context, glanceId)
+        WidgetRefresher.refresh(context)
     }
 }
 
 object WidgetRefresher {
     suspend fun refresh(ctx: Context) {
         runCatching { MemoWidget().updateAll(ctx.applicationContext) }
+        runCatching { MemoWidgetLarge().updateAll(ctx.applicationContext) }
     }
 }

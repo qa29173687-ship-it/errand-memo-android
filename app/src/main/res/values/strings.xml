@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">順便備忘</string>
-    <string name="widget_label">今天下班順便做</string>
+    <string name="widget_label">今天下班順便做 4×2</string>
+    <string name="widget_label_large">今天下班順便做 4×4</string>
     <string name="widget_desc">大時鐘＋今天下班要拿、要買的事，直接在桌面打勾、按 ＋ 新增</string>
+    <string name="widget_desc_large">大時鐘＋今天的清單（含備註、今天完成幾項），4×4 大尺寸</string>
 </resources>

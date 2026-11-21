@@ -24,6 +24,7 @@ import tw.memo.errands.alarm.Scheduler
 import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.widget.ClockApps
 import tw.memo.errands.widget.WidgetPin
 import tw.memo.errands.widget.WidgetPrefsBus
 import tw.memo.errands.widget.WidgetRefresher
@@ -166,13 +167,56 @@ private fun WidgetCard(prefs: Prefs, resumeTick: Int, onChanged: () -> Unit) {
                 { alpha = alphas[it]; prefs.widgetAlpha = alpha; apply() }, Modifier.fillMaxWidth())
             Text(if (placed > 0) "✅ 桌面上已經有 $placed 個順便備忘小工具" else "桌面上還沒有順便備忘小工具",
                 fontSize = 13.sp, fontWeight = FontWeight.Bold)
-            Button(onClick = {
-                if (!WidgetPin.request(ctx)) Toast.makeText(ctx, "這支手機不支援直接加入，請長按桌面 → 小工具 → 順便備忘", Toast.LENGTH_LONG).show()
-            }, modifier = Modifier.fillMaxWidth()) { Text(if (placed > 0) "📌 再加一個到桌面" else "📌 加到桌面") }
-            Text("也可以：長按桌面空白處 → 小工具 → 順便備忘。小工具是在「桌面」上，不在 App 裡面。點時間會打開手機的時鐘，點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((large, label) in listOf(false to "📌 加 4×2", true to "📌 加 4×4")) Button(onClick = {
+                    if (!WidgetPin.request(ctx, large)) Toast.makeText(ctx, "這支手機不支援直接加入，請長按桌面 → 小工具 → 順便備忘", Toast.LENGTH_LONG).show()
+                }, modifier = Modifier.weight(1f)) { Text(label) }
+            }
+            HorizontalDivider()
+            ClockRow(prefs) { apply() }
+            HorizontalDivider()
+            Text("也可以：長按桌面空白處 → 小工具 → 順便備忘，選「4×2」或「4×4」。小工具是在「桌面」上，不在 App 裡面。點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
         }
     }
 }
 
 fun appVersion(ctx: android.content.Context): String =
     runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?"
+
+/** 點小工具時間要打開哪個 App：顯示偵測結果、可自選、可測試。 */
+@Composable
+private fun ClockRow(prefs: Prefs, onChanged: () -> Unit) {
+    val ctx = LocalContext.current
+    var pref by remember { mutableStateOf(prefs.clockApp) }
+    val current = remember(pref) { ClockApps.current(ctx, pref) }
+    var picking by remember { mutableStateOf(false) }
+    Text("⏰ 點時間打開", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+    Text(ClockApps.label(ctx, current) + if (pref.isBlank()) "（自動偵測）" else "（自己選的）", fontSize = 15.sp)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { picking = true }, modifier = Modifier.weight(1f)) { Text("選擇 App") }
+        OutlinedButton(onClick = {
+            val i = ClockApps.intent(ctx, pref)
+            val ok = i != null && runCatching { ctx.startActivity(i) }.isSuccess
+            if (!ok) Toast.makeText(ctx, "打不開，請按「選擇 App」換一個試試", Toast.LENGTH_LONG).show()
+        }, modifier = Modifier.weight(1f)) { Text("測試") }
+    }
+    if (picking) {
+        val opts = remember { ClockApps.options(ctx) }
+        AlertDialog(onDismissRequest = { picking = false }, confirmButton = {}, dismissButton = { TextButton({ picking = false }) { Text("取消") } },
+            title = { Text("點時間要打開") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    fun pick(v: String) { pref = v; prefs.clockApp = v; picking = false; onChanged() }
+                    TextButton({ pick("") }, Modifier.fillMaxWidth()) { Text("自動偵測（建議）", Modifier.fillMaxWidth()) }
+                    var lastSection = -1
+                    for (o in opts) {
+                        if (o.section != lastSection) {
+                            lastSection = o.section
+                            Text(if (o.section == 0) "時鐘／鬧鐘" else "其他 App", fontSize = 12.sp, color = Muted, modifier = Modifier.padding(top = 8.dp))
+                        }
+                        TextButton({ pick(ClockApps.encode(o.choice)) }, Modifier.fillMaxWidth()) { Text(o.label, Modifier.fillMaxWidth()) }
+                    }
+                }
+            })
+    }
+}

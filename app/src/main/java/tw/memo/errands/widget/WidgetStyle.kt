@@ -66,8 +66,8 @@ object WidgetStyle {
 
     fun blockHeight(clock: Float, date: Float, tighten: Float = 0f) = (2 * LINE - tighten) * clock + DATE_GAP + DATE_LINE * date
 
-    fun metrics(widthDp: Float, heightDp: Float, tighten: Float = 0f): Metrics {
-        val large = heightDp >= 220f
+    fun metrics(widthDp: Float, heightDp: Float, tighten: Float = 0f, forceLarge: Boolean = false): Metrics {
+        val large = forceLarge || heightDp >= 220f
         val col = widthDp * (if (large) .40f else .36f)
         val inner = max(40f, col - 20f) // 左右 padding
         val date = (inner * .115f).coerceIn(11f, 15f)
@@ -75,23 +75,5 @@ object WidgetStyle {
         val fit = (room - DATE_GAP - DATE_LINE * date) / (2 * LINE - tighten)
         val clock = max(20f, minOf(inner * .76f, heightDp * (if (large) .26f else .36f), fit))
         return Metrics(large, col, clock, date, blockHeight(clock, date, tighten), tighten)
-    }
-
-    /** 點時鐘要打開哪個時鐘 App：優先系統「顯示鬧鐘」，否則找已安裝的常見時鐘。 */
-    val CLOCK_PACKAGES = listOf(
-        "com.google.android.deskclock", "com.sec.android.app.clockpackage", "com.android.deskclock",
-        "com.miui.clock", "com.oneplus.deskclock", "com.coloros.alarmclock", "com.htc.android.worldclock",
-        "com.asus.deskclock", "com.sonymobile.alarm", "com.motorola.timeweatherwidget",
-    )
-
-    sealed interface ClockTarget {
-        object ShowAlarms : ClockTarget
-        data class Package(val pkg: String) : ClockTarget
-        object None : ClockTarget
-    }
-
-    fun chooseClock(showAlarmsResolves: Boolean, launchable: Set<String>): ClockTarget = when {
-        showAlarmsResolves -> ClockTarget.ShowAlarms
-        else -> CLOCK_PACKAGES.firstOrNull { it in launchable }?.let { ClockTarget.Package(it) } ?: ClockTarget.None
     }
 }

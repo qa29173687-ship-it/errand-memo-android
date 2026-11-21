@@ -3,7 +3,6 @@ package tw.memo.errands
 import org.junit.Assert.*
 import org.junit.Test
 import tw.memo.errands.widget.WidgetStyle
-import tw.memo.errands.widget.WidgetStyle.ClockTarget
 
 class WidgetStyleTest {
     private fun alphaByte(argb: Int) = (argb ushr 24) and 0xFF
@@ -58,13 +57,11 @@ class WidgetStyleTest {
         assertTrue(m.clockBlock + WidgetStyle.PAD_V_MEDIUM <= 110f + .01f)
     }
 
-    @Test fun clockAppChoice() {
-        assertEquals(ClockTarget.ShowAlarms, WidgetStyle.chooseClock(true, setOf("com.android.deskclock")))
-        assertEquals(ClockTarget.Package("com.sec.android.app.clockpackage"),
-            WidgetStyle.chooseClock(false, setOf("com.android.deskclock", "com.sec.android.app.clockpackage")))
-        assertEquals(ClockTarget.Package("com.google.android.deskclock"),
-            WidgetStyle.chooseClock(false, setOf("com.google.android.deskclock", "com.android.deskclock")))
-        assertEquals(ClockTarget.None, WidgetStyle.chooseClock(false, emptySet()))
+    @Test fun forceLargeAlwaysUsesLargeLayout() {
+        assertFalse(WidgetStyle.metrics(360f, 180f).large)
+        val m = WidgetStyle.metrics(360f, 180f, forceLarge = true)
+        assertTrue(m.large)
+        assertTrue(m.clockSp >= 20f)
     }
 }
 
