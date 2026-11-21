@@ -42,19 +42,20 @@ class WidgetStyleTest {
         assertFalse(m.large)
         assertEquals(129.6f, m.clockCol, .01f)
         assertTrue(m.clockSp in 50f..90f)
-        // 時＋分兩行要塞得進高度
-        assertTrue(m.clockSp * 2 + m.dateSp * 1.5f + 20 <= 180f)
+        // 時＋分兩行＋日期要塞得進高度（扣掉上下 padding）
+        assertTrue(m.clockBlock + WidgetStyle.PAD_V_MEDIUM <= 180f + .01f)
         val l = WidgetStyle.metrics(360f, 400f)
         assertTrue(l.large)
         assertTrue(l.clockSp > m.clockSp)
         assertTrue(l.clockSp <= (l.clockCol - 20f) * .76f + .01f) // 不超出左欄寬
         assertTrue(l.dateSp in 11f..15f)
+        assertTrue(l.clockBlock + WidgetStyle.PAD_V_LARGE + WidgetStyle.PROGRESS_BLOCK <= 400f + .01f)
     }
 
     @Test fun smallWidgetsStillGetReadableClock() {
         val m = WidgetStyle.metrics(250f, 110f)
         assertTrue(m.clockSp >= 28f)
-        assertTrue(m.clockSp * 2 <= 110f)
+        assertTrue(m.clockBlock + WidgetStyle.PAD_V_MEDIUM <= 110f + .01f)
     }
 
     @Test fun clockAppChoice() {
@@ -64,5 +65,24 @@ class WidgetStyleTest {
         assertEquals(ClockTarget.Package("com.google.android.deskclock"),
             WidgetStyle.chooseClock(false, setOf("com.google.android.deskclock", "com.android.deskclock")))
         assertEquals(ClockTarget.None, WidgetStyle.chooseClock(false, emptySet()))
+    }
+}
+
+class WidgetFitTest {
+    @Test fun clockBlockAlwaysFitsCommonLauncherSizes() {
+        for (t in listOf(0f, WidgetStyle.TIGHTEN)) for (w in listOf(250f, 300f, 330f, 360f, 380f, 411f)) for (h in listOf(110f, 140f, 160f, 180f, 200f, 220f, 280f, 340f, 400f, 460f)) {
+            val m = WidgetStyle.metrics(w, h, t)
+            val room = h - (if (m.large) WidgetStyle.PAD_V_LARGE + WidgetStyle.PROGRESS_BLOCK else WidgetStyle.PAD_V_MEDIUM)
+            if (m.clockSp > 20f) assertTrue("${w}x$h block=${m.clockBlock} room=$room", m.clockBlock <= room + .01f)
+            assertTrue("${w}x$h 時鐘寬度", m.clockSp * 1.1f <= m.clockCol - 19f)
+        }
+    }
+}
+
+class WidgetTightenTest {
+    @Test fun tighteningOnAndroid12AllowsSameOrBiggerClock() {
+        val a = WidgetStyle.metrics(360f, 170f, 0f); val b = WidgetStyle.metrics(360f, 170f, WidgetStyle.TIGHTEN)
+        assertTrue(b.clockSp >= a.clockSp)
+        assertTrue(b.clockBlock + WidgetStyle.PAD_V_MEDIUM <= 170.01f)
     }
 }

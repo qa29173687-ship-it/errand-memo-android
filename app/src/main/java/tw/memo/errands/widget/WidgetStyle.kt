@@ -50,16 +50,31 @@ object WidgetStyle {
         ok = 0xFF2E9E6B.toInt(),
     )
 
-    /** 版面尺寸（dp）：左欄寬度、時鐘字級、日期字級。跟 DEMO 一樣 4×2 佔 36%、4×4 佔 40%。 */
-    data class Metrics(val large: Boolean, val clockCol: Float, val clockSp: Float, val dateSp: Float)
+    /** 版面尺寸（dp）：左欄寬度、時鐘字級、日期字級、時鐘區塊高度。跟 DEMO 一樣 4×2 佔 36%、4×4 佔 40%。 */
+    data class Metrics(val large: Boolean, val clockCol: Float, val clockSp: Float, val dateSp: Float, val clockBlock: Float, val tighten: Float = 0f)
 
-    fun metrics(widthDp: Float, heightDp: Float): Metrics {
+    /** TextClock 一行的實際高度約是字級的 1.18 倍（includeFontPadding=false），日期約 1.35 倍。 */
+    const val LINE = 1.18f
+    const val DATE_LINE = 1.35f
+    const val DATE_GAP = 6f
+    const val PAD_V_MEDIUM = 20f  // 上下 padding 合計
+    const val PAD_V_LARGE = 30f
+    const val PROGRESS_BLOCK = 76f // 4×4 下方「今天完成」區塊（含間距）
+
+    /** tighten：Android 12+ 可以把「分」往上拉，縮小時與分之間的空隙（字級的比例）。 */
+    const val TIGHTEN = .28f
+
+    fun blockHeight(clock: Float, date: Float, tighten: Float = 0f) = (2 * LINE - tighten) * clock + DATE_GAP + DATE_LINE * date
+
+    fun metrics(widthDp: Float, heightDp: Float, tighten: Float = 0f): Metrics {
         val large = heightDp >= 220f
         val col = widthDp * (if (large) .40f else .36f)
         val inner = max(40f, col - 20f) // 左右 padding
-        val clock = min(inner * .76f, heightDp * (if (large) .26f else .36f))
         val date = (inner * .115f).coerceIn(11f, 15f)
-        return Metrics(large, col, max(28f, clock), date)
+        val room = heightDp - (if (large) PAD_V_LARGE + PROGRESS_BLOCK else PAD_V_MEDIUM)
+        val fit = (room - DATE_GAP - DATE_LINE * date) / (2 * LINE - tighten)
+        val clock = max(20f, minOf(inner * .76f, heightDp * (if (large) .26f else .36f), fit))
+        return Metrics(large, col, clock, date, blockHeight(clock, date, tighten), tighten)
     }
 
     /** 點時鐘要打開哪個時鐘 App：優先系統「顯示鬧鐘」，否則找已安裝的常見時鐘。 */

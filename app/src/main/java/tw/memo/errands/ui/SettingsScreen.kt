@@ -24,6 +24,7 @@ import tw.memo.errands.alarm.Scheduler
 import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.widget.WidgetPin
 import tw.memo.errands.widget.WidgetPrefsBus
 import tw.memo.errands.widget.WidgetRefresher
 import tw.memo.errands.widget.WidgetStyle
@@ -40,6 +41,7 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("設定", fontSize = 26.sp, fontWeight = FontWeight.Bold)
+        WidgetCard(prefs, resumeTick) { scope.launch(Dispatchers.IO) { WidgetRefresher.refresh(ctx) } }
         key(tick) {
             SlotCard("🏃 下班提醒", "到點列出今天要拿、要買的東西（沒有項目就不提醒）",
                 prefs.eveningTime, prefs.eveningDays, prefs.eveningMode,
@@ -57,7 +59,6 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
             }
         }
         PermissionCard(resumeTick, requestNotif)
-        key(tick) { WidgetCard(prefs) { scope.launch(Dispatchers.IO) { WidgetRefresher.refresh(ctx) } } }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("🔔 測試", fontWeight = FontWeight.Bold, fontSize = 17.sp)
@@ -68,7 +69,7 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
                 }
             }
         }
-        Text("順便備忘 v1.0.4 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
+        Text("版本 ${appVersion(ctx)} · 資料只存在這支手機", fontSize = 13.sp, color = Muted)
     }
 
     pickTime?.let { which ->
@@ -145,7 +146,9 @@ private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
 
 /** 桌面小工具外觀：底色、透明度；改了馬上更新桌面上的小工具。 */
 @Composable
-private fun WidgetCard(prefs: Prefs, onChanged: () -> Unit) {
+private fun WidgetCard(prefs: Prefs, resumeTick: Int, onChanged: () -> Unit) {
+    val ctx = LocalContext.current
+    val placed = remember(resumeTick) { WidgetPin.count(ctx) }
     var tint by remember { mutableStateOf(prefs.widgetTint) }
     var alpha by remember { mutableStateOf(prefs.widgetAlpha) }
     val tints = listOf(WidgetStyle.TINT_LIGHT, WidgetStyle.TINT_DARK, WidgetStyle.TINT_SYSTEM)
@@ -161,7 +164,15 @@ private fun WidgetCard(prefs: Prefs, onChanged: () -> Unit) {
             Text("透明度（高＝最透明）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
             Segmented(listOf("高", "中", "低"), alphas.indexOf(alpha).coerceAtLeast(0),
                 { alpha = alphas[it]; prefs.widgetAlpha = alpha; apply() }, Modifier.fillMaxWidth())
-            Text("加到桌面：長按桌面 → 小工具 → 順便備忘。點時間會打開手機的時鐘，點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
+            Text(if (placed > 0) "✅ 桌面上已經有 $placed 個順便備忘小工具" else "桌面上還沒有順便備忘小工具",
+                fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Button(onClick = {
+                if (!WidgetPin.request(ctx)) Toast.makeText(ctx, "這支手機不支援直接加入，請長按桌面 → 小工具 → 順便備忘", Toast.LENGTH_LONG).show()
+            }, modifier = Modifier.fillMaxWidth()) { Text(if (placed > 0) "📌 再加一個到桌面" else "📌 加到桌面") }
+            Text("也可以：長按桌面空白處 → 小工具 → 順便備忘。小工具是在「桌面」上，不在 App 裡面。點時間會打開手機的時鐘，點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
         }
     }
 }
+
+fun appVersion(ctx: android.content.Context): String =
+    runCatching { ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName }.getOrNull() ?: "?"

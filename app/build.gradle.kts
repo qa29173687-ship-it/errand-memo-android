@@ -14,8 +14,8 @@ android {
         applicationId = "tw.memo.errands"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.0.4"
+        versionCode = 6
+        versionName = "1.0.5"
     }
     signingConfigs {
         if (ksProps.isNotEmpty()) create("release") {
@@ -38,6 +38,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    testOptions { unitTests.isIncludeAndroidResources = true }
     lint { abortOnError = false; checkReleaseBuilds = false }
     packaging { resources { excludes += setOf("/META-INF/{AL2.0,LGPL2.1}") } }
 }
@@ -63,4 +64,8 @@ dependencies {
     implementation("androidx.glance:glance-material3:1.1.0")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.xerial:sqlite-jdbc:3.46.1.3")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core-ktx:1.6.1")
+    testImplementation("androidx.glance:glance-appwidget-testing:1.1.0")
+    testImplementation("androidx.glance:glance-testing:1.1.0")
 }

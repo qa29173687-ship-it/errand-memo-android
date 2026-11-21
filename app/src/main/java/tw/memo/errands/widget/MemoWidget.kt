@@ -126,10 +126,10 @@ class MemoWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun Content(all: List<Errand>, tint: String, alpha: String) {
+    internal fun Content(all: List<Errand>, tint: String, alpha: String) {
         val ctx = LocalContext.current
         val size = LocalSize.current
-        val m = WidgetStyle.metrics(size.width.value, size.height.value)
+        val m = WidgetStyle.metrics(size.width.value, size.height.value, if (Build.VERSION.SDK_INT >= 31) WidgetStyle.TIGHTEN else 0f)
         val today = LocalDate.now()
         val s = WidgetLogic.state(all, today, null)
         val light = WidgetStyle.palette(false, alpha)
@@ -143,9 +143,9 @@ class MemoWidget : GlanceAppWidget() {
         else GlanceModifier.background(ImageProvider(bgRes(tint, alpha)))
         Row(bg.then(GlanceModifier.fillMaxSize().appWidgetBackground())) {
             Column(GlanceModifier.width(m.clockCol.dp).fillMaxHeight()
-                .padding(start = 15.dp, end = 4.dp, top = if (m.large) 16.dp else 10.dp, bottom = if (m.large) 14.dp else 10.dp),
+                .padding(start = 15.dp, end = 4.dp, top = if (m.large) 16.dp else 10.dp, bottom = if (m.large) 14.dp else 10.dp) /* = PAD_V_* */,
                 verticalAlignment = if (m.large) Alignment.Top else Alignment.CenterVertically) {
-                AndroidRemoteViews(clockViews(ctx, tint, m), GlanceModifier.fillMaxWidth())
+                AndroidRemoteViews(clockViews(ctx, tint, m), GlanceModifier.fillMaxWidth().height(m.clockBlock.dp))
                 if (m.large) {
                     Spacer(GlanceModifier.defaultWeight())
                     Column(GlanceModifier.fillMaxWidth().clickable(actionStartActivity(appIntent(ctx)))) {
@@ -200,6 +200,8 @@ class MemoWidget : GlanceAppWidget() {
             setTextViewTextSize(R.id.clock_h, TypedValue.COMPLEX_UNIT_DIP, m.clockSp)
             setTextViewTextSize(R.id.clock_m, TypedValue.COMPLEX_UNIT_DIP, m.clockSp)
             setTextViewTextSize(R.id.clock_date, TypedValue.COMPLEX_UNIT_DIP, m.dateSp)
+            if (Build.VERSION.SDK_INT >= 31 && m.tighten > 0f)
+                setViewLayoutMargin(R.id.clock_m, RemoteViews.MARGIN_TOP, -m.tighten * m.clockSp, TypedValue.COMPLEX_UNIT_DIP)
             setOnClickPendingIntent(R.id.clock_time, clock)
             setOnClickPendingIntent(R.id.clock_date, app)
         }
