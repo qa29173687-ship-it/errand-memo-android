@@ -24,6 +24,9 @@ import tw.memo.errands.alarm.Scheduler
 import tw.memo.errands.data.Mode
 import tw.memo.errands.data.Prefs
 import tw.memo.errands.logic.Logic
+import tw.memo.errands.widget.WidgetPrefsBus
+import tw.memo.errands.widget.WidgetRefresher
+import tw.memo.errands.widget.WidgetStyle
 import java.time.LocalTime
 
 @Composable
@@ -54,6 +57,7 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
             }
         }
         PermissionCard(resumeTick, requestNotif)
+        key(tick) { WidgetCard(prefs) { scope.launch(Dispatchers.IO) { WidgetRefresher.refresh(ctx) } } }
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("🔔 測試", fontWeight = FontWeight.Bold, fontSize = 17.sp)
@@ -64,7 +68,7 @@ fun SettingsScreen(resumeTick: Int, requestNotif: () -> Unit) {
                 }
             }
         }
-        Text("順便備忘 v1.0.2 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
+        Text("順便備忘 v1.0.4 · 資料只存在這支手機", fontSize = 12.sp, color = Muted)
     }
 
     pickTime?.let { which ->
@@ -136,5 +140,28 @@ private fun PermRow(label: String, ok: Boolean, onFix: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text((if (ok) "✅ " else "⚠️ ") + label, Modifier.weight(1f), fontSize = 15.sp)
         if (ok) Text("已允許", color = Muted, fontSize = 13.sp) else TextButton(onClick = onFix) { Text("去開啟") }
+    }
+}
+
+/** 桌面小工具外觀：底色、透明度；改了馬上更新桌面上的小工具。 */
+@Composable
+private fun WidgetCard(prefs: Prefs, onChanged: () -> Unit) {
+    var tint by remember { mutableStateOf(prefs.widgetTint) }
+    var alpha by remember { mutableStateOf(prefs.widgetAlpha) }
+    val tints = listOf(WidgetStyle.TINT_LIGHT, WidgetStyle.TINT_DARK, WidgetStyle.TINT_SYSTEM)
+    val alphas = listOf(WidgetStyle.ALPHA_HIGH, WidgetStyle.ALPHA_MID, WidgetStyle.ALPHA_LOW)
+    fun apply() { WidgetPrefsBus.bump(); onChanged() }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("🪟 桌面小工具", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            Text("半透明底色，可以看到桌布（Android 小工具沒辦法做毛玻璃模糊）。桌布很花的話，選深色或透明度「低」比較好讀。", fontSize = 13.sp, color = Muted)
+            Text("底色", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Segmented(listOf("淺色", "深色", "跟隨系統"), tints.indexOf(tint).coerceAtLeast(0),
+                { tint = tints[it]; prefs.widgetTint = tint; apply() }, Modifier.fillMaxWidth())
+            Text("透明度（高＝最透明）", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+            Segmented(listOf("高", "中", "低"), alphas.indexOf(alpha).coerceAtLeast(0),
+                { alpha = alphas[it]; prefs.widgetAlpha = alpha; apply() }, Modifier.fillMaxWidth())
+            Text("加到桌面：長按桌面 → 小工具 → 順便備忘。點時間會打開手機的時鐘，點日期或標題會打開順便備忘。", fontSize = 12.sp, color = Muted)
+        }
     }
 }

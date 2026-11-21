@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小工具左邊的大時鐘（系統 TextClock，自己會走）。時在上、分在下。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/clock_root" android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="vertical">
+    <LinearLayout android:id="@+id/clock_time" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="vertical">
+        <TextClock android:id="@+id/clock_h" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:format24Hour="HH" android:format12Hour="hh" android:textSize="60sp" android:textStyle="bold"
+            android:letterSpacing="-0.05" android:includeFontPadding="false" android:fontFeatureSettings="tnum"
+            android:textColor="#FF1D1714" android:shadowColor="#E6FFFFFF" android:shadowRadius="6" android:shadowDy="1" />
+        <TextClock android:id="@+id/clock_m" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:format24Hour="mm" android:format12Hour="mm" android:textSize="60sp" android:textStyle="bold"
+            android:letterSpacing="-0.05" android:includeFontPadding="false" android:fontFeatureSettings="tnum"
+            android:textColor="#FFC9561B" android:shadowColor="#E6FFFFFF" android:shadowRadius="6" android:shadowDy="1" />
+    </LinearLayout>
+    <TextClock android:id="@+id/clock_date" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="6dp" android:format24Hour="M月d日 EEE" android:format12Hour="M月d日 EEE"
+        android:textSize="13sp" android:textStyle="bold" android:singleLine="true" android:ellipsize="end"
+        android:textColor="#FF1D1714" android:shadowColor="#E6FFFFFF" android:shadowRadius="5" android:shadowDy="1" />
+</LinearLayout>

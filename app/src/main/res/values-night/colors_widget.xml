@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="wc_ink">#FFFFFFFF</color>
+    <color name="wc_accent">#FFFF9A62</color>
+    <color name="wc_shadow">#B3000000</color>
+</resources>

@@ -7,6 +7,21 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- 點小工具時間 → 打開手機內建時鐘 -->
+    <queries>
+        <intent><action android:name="android.intent.action.SHOW_ALARMS" /></intent>
+        <package android:name="com.google.android.deskclock" />
+        <package android:name="com.sec.android.app.clockpackage" />
+        <package android:name="com.android.deskclock" />
+        <package android:name="com.miui.clock" />
+        <package android:name="com.oneplus.deskclock" />
+        <package android:name="com.coloros.alarmclock" />
+        <package android:name="com.htc.android.worldclock" />
+        <package android:name="com.asus.deskclock" />
+        <package android:name="com.sonymobile.alarm" />
+        <package android:name="com.motorola.timeweatherwidget" />
+    </queries>
+
     <application
         android:name=".App"
         android:allowBackup="true"
